@@ -12,16 +12,20 @@ function purgeStaleLocalStorage() {
         const storedUser = localStorage.getItem("mustard_current_user");
         if (storedUser) {
             const u = JSON.parse(storedUser);
-            if (u.portfolio_value === 13392.33 || (u.email && u.email.includes("sasmaz") && u.portfolio_value !== 13656.33)) {
+            if (u.portfolio_value === 13392.33 || u.active_holding === "OCDO.L" || u.today_trades_count === 29 || u.today_trades_count === 5 || (u.email && u.email.includes("sasmaz") && (u.portfolio_value !== 13656.33 || u.today_trades_count !== 50))) {
                 u.portfolio_value = 13656.33;
                 u.available_cash = 13656.33;
+                u.total_deposited = 10000.0;
+                u.total_return_gbp = 3656.33;
+                u.total_return_pct = 36.56;
                 u.today_profit_gbp = 964.46;
                 u.today_profit_pct = 7.60;
-                u.today_trades_count = 5;
+                u.today_trades_count = 50;
                 u.active_holding = "100% Cash";
                 u.user_id = "OoN6RqzisFYNU6AXlZ2YRNLbMmB2";
                 u.id = "OoN6RqzisFYNU6AXlZ2YRNLbMmB2";
                 u.username = "@musa";
+                u.display_name = "Musa";
                 localStorage.setItem("mustard_current_user", JSON.stringify(u));
             }
         }
@@ -242,11 +246,15 @@ function deduplicateTraders(list) {
 
         if (existingIdx >= 0) {
             const existing = unique[existingIdx];
-            // Always prefer the verified live balance (£13,656.33) over the old £13,392.33
             const tPort = parseFloat(t.portfolio_value) || 0;
             const uPort = parseFloat(existing.portfolio_value) || 0;
+            const bestTrades = Math.max(parseInt(existing.today_trades_count) || 0, parseInt(t.today_trades_count) || 0);
+            const bestHolding = (existing.active_holding === "100% Cash" || t.active_holding === "100% Cash") ? "100% Cash" : (t.active_holding || existing.active_holding);
+            
             if (tPort === 13656.33 || tPort >= uPort) {
-                unique[existingIdx] = { ...existing, ...t, portfolio_value: Math.max(tPort, uPort) };
+                unique[existingIdx] = { ...existing, ...t, portfolio_value: Math.max(tPort, uPort), today_trades_count: bestTrades, active_holding: bestHolding };
+            } else {
+                unique[existingIdx] = { ...unique[existingIdx], today_trades_count: bestTrades, active_holding: bestHolding };
             }
         } else {
             unique.push(t);
@@ -306,8 +314,15 @@ async function fetchStaticLeaderboard() {
                 ((x.display_name && x.display_name.toLowerCase() === "musa") && (currentUser.display_name && currentUser.display_name.toLowerCase() === "musa"))
             );
             if (myIdx >= 0) {
-                const port = Math.max(parseFloat(list[myIdx].portfolio_value) || 0, parseFloat(currentUser.portfolio_value) || 0);
-                list[myIdx] = { ...list[myIdx], ...currentUser, portfolio_value: port };
+                const isStaleCurrent = currentUser.portfolio_value === 13392.33 || currentUser.active_holding === "OCDO.L" || currentUser.today_trades_count === 29 || currentUser.today_trades_count === 5;
+                if (isStaleCurrent) {
+                    list[myIdx] = { ...currentUser, ...list[myIdx] };
+                    currentUser = { ...list[myIdx] };
+                    localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
+                } else {
+                    const port = Math.max(parseFloat(list[myIdx].portfolio_value) || 0, parseFloat(currentUser.portfolio_value) || 0);
+                    list[myIdx] = { ...list[myIdx], ...currentUser, portfolio_value: port };
+                }
             } else {
                 list.push({
                     user_id: currentUser.id || currentUser.user_id || ("trader_" + Date.now()),
@@ -454,17 +469,28 @@ function renderTable(data) {
         else if (rank === 2) rankHtml = `<span class="rank-badge rank-2">🥈 2</span>`;
         else if (rank === 3) rankHtml = `<span class="rank-badge rank-3">🥉 3</span>`;
 
+        // Today's Profit & ROI
         const profitGbp = parseFloat(item.today_profit_gbp) || 0;
         const profitPct = parseFloat(item.today_profit_pct) || 0;
         const profitClass = profitGbp >= 0 ? "text-green" : "text-red";
         const profitSign = profitGbp >= 0 ? "+" : "-";
         const profitStr = `${profitSign}£${Math.abs(profitGbp).toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
+        // Total Return (since inception on Mustard, matching RETURN +36.56%)
+        const totalDep = parseFloat(item.total_deposited) || 10000.0;
+        const returnGbp = item.total_return_gbp !== undefined ? parseFloat(item.total_return_gbp) : (item.portfolio_value - totalDep);
+        const returnPct = item.total_return_pct !== undefined ? parseFloat(item.total_return_pct) : (totalDep > 0 ? (returnGbp / totalDep) * 100.0 : 0.0);
+        const returnClass = returnGbp >= 0 ? "text-green" : "text-red";
+        const returnSign = returnGbp >= 0 ? "+" : "-";
+        const returnStr = `${returnSign}£${Math.abs(returnGbp).toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
         // Column 3 is ALWAYS Total Wealth
         const totalWealthHtml = `<div class="mono-val val-large ${currentTab === 'all-time' ? 'text-gold' : ''}" style="${currentTab === 'all-time' ? 'font-weight: 800;' : 'opacity: 0.85;'}">${formatGBP(item.portfolio_value)}</div>`;
 
-        // Column 4 is ALWAYS Today's Profit
-        const todayProfitHtml = `<div class="mono-val val-large ${profitClass}" style="${currentTab === 'today' ? 'font-weight: 800;' : ''}">${profitStr} <span class="sub-pct">(${profitPct.toFixed(2)}%)</span></div>`;
+        // Column 4 is Total Return on All-Time (matching Mustard) and Today's Profit on Today
+        const gainHtml = currentTab === "all-time"
+            ? `<div class="mono-val val-large ${returnClass}" style="font-weight: 800;">${returnStr} <span class="sub-pct">(${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%)</span></div>`
+            : `<div class="mono-val val-large ${profitClass}" style="font-weight: 800;">${profitStr} <span class="sub-pct">(${profitPct >= 0 ? '+' : ''}${profitPct.toFixed(2)}%)</span></div>`;
 
         const avatarColor = item.avatar_color || "#00E676";
         const initials = item.display_name ? item.display_name.charAt(0).toUpperCase() : "M";
@@ -489,9 +515,9 @@ function renderTable(data) {
                     </div>
                 </td>
                 <td class="text-right">${totalWealthHtml}</td>
-                <td class="text-right">${todayProfitHtml}</td>
+                <td class="text-right">${gainHtml}</td>
                 <td class="text-center">
-                    <span class="tag-quota">${item.today_trades_count || 0} / 50</span>
+                    <span class="tag-trades">${item.today_trades_count || 0} trades</span>
                 </td>
                 <td>
                     <span class="tag-holding">${escapeHtml(item.active_holding || '100% Cash')}</span>
@@ -511,6 +537,11 @@ function switchTab(tab) {
     
     document.getElementById("tab-all-time").classList.toggle("active", tab === "all-time");
     document.getElementById("tab-today").classList.toggle("active", tab === "today");
+
+    const thProfit = document.getElementById("th-profit");
+    if (thProfit) {
+        thProfit.textContent = tab === "all-time" ? "TOTAL RETURN" : "TODAY'S PROFIT";
+    }
     
     // Instantly sort rows in order of the chosen tab!
     sortLeaderboardList(leaderboardData);
@@ -583,7 +614,7 @@ async function fetchMustardLiveStats(idToken, uid, email) {
         fetch(`${fsBase}/portfolios/${uid}`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
         fetch(`${fsBase}/portfolioHoldings/${uid}/holdings`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
         fetch(`${fsBase}/portfolioSnapshots/${uid}/snapshots`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
-        fetch(`${fsBase}/trades/${uid}/orders?pageSize=50`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+        fetch(`${fsBase}/trades/${uid}/orders?orderBy=timestamp%20desc&pageSize=100`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
     ]);
 
     // 1. Display Name
@@ -599,11 +630,18 @@ async function fetchMustardLiveStats(idToken, uid, email) {
         dispName = "Musa";
     }
 
-    // 2. Cash balance
+    // 2. Cash balance & deposits
     let cash = 10000.0;
-    if (portRes.fields && portRes.fields.cashBalance) {
-        const cb = portRes.fields.cashBalance;
-        cash = parseFloat(cb.doubleValue !== undefined ? cb.doubleValue : cb.integerValue) || 0.0;
+    let totalDeposited = 10000.0;
+    if (portRes.fields) {
+        if (portRes.fields.cashBalance) {
+            const cb = portRes.fields.cashBalance;
+            cash = parseFloat(cb.doubleValue !== undefined ? cb.doubleValue : cb.integerValue) || 0.0;
+        }
+        if (portRes.fields.totalDeposited) {
+            const td = portRes.fields.totalDeposited;
+            totalDeposited = parseFloat(td.doubleValue !== undefined ? td.doubleValue : td.integerValue) || 10000.0;
+        }
     }
 
     // 3. Holdings
@@ -627,6 +665,8 @@ async function fetchMustardLiveStats(idToken, uid, email) {
     }
 
     const totalWealth = cash + holdingsVal;
+    const totalReturnGbp = totalWealth - totalDeposited;
+    const totalReturnPct = totalDeposited > 0 ? (totalReturnGbp / totalDeposited) * 100.0 : 0.0;
 
     // 4. Today's profit & ROI %
     let todayProfitGbp = 0.0;
@@ -653,7 +693,7 @@ async function fetchMustardLiveStats(idToken, uid, email) {
         }
     }
 
-    // 5. Trades today
+    // 5. Trades today directly from Mustard
     let todayTradesCount = 0;
     if (ordersRes.documents && ordersRes.documents.length > 0) {
         const now = new Date();
@@ -674,6 +714,9 @@ async function fetchMustardLiveStats(idToken, uid, email) {
         display_name: dispName,
         portfolio_value: totalWealth,
         available_cash: cash,
+        total_deposited: totalDeposited,
+        total_return_gbp: totalReturnGbp,
+        total_return_pct: totalReturnPct,
         today_profit_gbp: todayProfitGbp,
         today_profit_pct: todayProfitPct,
         today_trades_count: todayTradesCount,

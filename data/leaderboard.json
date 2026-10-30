@@ -1,5 +1,5 @@
 {
-  "last_synced": "2026-10-30T19:00:00Z",
+  "last_synced": "2026-10-30T19:30:00Z",
   "leaderboard": [
     {
       "user_id": "OoN6RqzisFYNU6AXlZ2YRNLbMmB2",
@@ -10,9 +10,12 @@
       "avatar_color": "#FFC107",
       "portfolio_value": 13656.33,
       "available_cash": 13656.33,
+      "total_deposited": 10000.0,
+      "total_return_gbp": 3656.33,
+      "total_return_pct": 36.56,
       "today_profit_gbp": 964.46,
       "today_profit_pct": 7.60,
-      "today_trades_count": 5,
+      "today_trades_count": 50,
       "active_holding": "100% Cash",
       "last_updated": "2026-10-30T18:19:04Z"
     }
@@ -20,7 +23,9 @@
   "summary": {
     "total_wealth": 13656.33,
     "total_today_profit": 964.46,
-    "total_trades": 5,
+    "total_return_gbp": 3656.33,
+    "total_return_pct": 36.56,
+    "total_trades": 50,
     "active_traders": 1
   }
 }
