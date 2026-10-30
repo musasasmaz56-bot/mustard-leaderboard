@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="static/css/style.css?v=2.1">
+    <link rel="stylesheet" href="static/css/style.css?v=2.2">
 </head>
 <body>
     <!-- Top Navigation -->
@@ -162,7 +162,7 @@
             <form onsubmit="handleLogin(event)">
                 <div class="form-group">
                     <label>Mustard Email</label>
-                    <input type="email" id="login-email" required placeholder="e.g. 22sasmazm@ccgrammarschool.co.uk" autocomplete="email">
+                    <input type="email" id="login-email" required placeholder="e.g. trader@mustard.co.uk" autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label>Password</label>
@@ -191,7 +191,7 @@
             <form onsubmit="handleSaveDisplayName(event)">
                 <div class="form-group">
                     <label>New Display Name</label>
-                    <input type="text" id="edit-new-name" required placeholder="e.g. Musa (Top Trader)">
+                    <input type="text" id="edit-new-name" required placeholder="e.g. Apex Trader">
                     <small style="color: var(--text-muted); font-size: 11px; display: block; margin-top: 4px;">Updates your name live on the leaderboard table immediately.</small>
                 </div>
                 <div id="edit-name-error" class="form-error"></div>
@@ -212,21 +212,21 @@
                 <div class="form-row">
                     <div class="form-group col-half">
                         <label>Portfolio Value (£)</label>
-                        <input type="number" step="0.01" id="upd-portfolio" required placeholder="13392.33">
+                        <input type="number" step="0.01" id="upd-portfolio" required placeholder="10000.00">
                     </div>
                     <div class="form-group col-half">
                         <label>Available Cash (£)</label>
-                        <input type="number" step="0.01" id="upd-cash" placeholder="0.21">
+                        <input type="number" step="0.01" id="upd-cash" placeholder="50.00">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group col-half">
                         <label>Today's Profit (£)</label>
-                        <input type="number" step="0.01" id="upd-today-profit" placeholder="1392.33">
+                        <input type="number" step="0.01" id="upd-today-profit" placeholder="250.00">
                     </div>
                     <div class="form-group col-half">
                         <label>Today's Trades (out of 50)</label>
-                        <input type="number" id="upd-trades" min="0" max="50" placeholder="29">
+                        <input type="number" id="upd-trades" min="0" max="50" placeholder="15">
                     </div>
                 </div>
                 <div class="form-group">
@@ -254,6 +254,6 @@
         </div>
     </div>
 
-    <script src="static/js/app.js?v=2.1"></script>
+    <script src="static/js/app.js?v=2.2"></script>
 </body>
 </html>
