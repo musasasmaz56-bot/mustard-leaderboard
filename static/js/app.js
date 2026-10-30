@@ -8,6 +8,7 @@ let refreshInterval = null;
 // --- Purge Stale Mock / Legacy Storage ---
 function purgeStaleLocalStorage() {
     try {
+        localStorage.removeItem("mustard_local_traders");
         const storedUser = localStorage.getItem("mustard_current_user");
         if (storedUser) {
             const u = JSON.parse(storedUser);
@@ -23,12 +24,6 @@ function purgeStaleLocalStorage() {
                 u.username = "@musa";
                 localStorage.setItem("mustard_current_user", JSON.stringify(u));
             }
-        }
-        const storedTraders = localStorage.getItem("mustard_local_traders");
-        if (storedTraders) {
-            let arr = JSON.parse(storedTraders);
-            arr = arr.filter(t => t.portfolio_value !== 13392.33 && (!t.email || !t.email.includes("sasmaz") || t.portfolio_value === 13656.33));
-            localStorage.setItem("mustard_local_traders", JSON.stringify(arr));
         }
     } catch (e) {}
 }
@@ -302,27 +297,20 @@ async function fetchStaticLeaderboard() {
             } catch (e) {}
         }
         
-        // 3. Merge with local device traders
-        const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-        if (localTraders.length > 0) {
-            localTraders.forEach(trader => {
-                const existingIdx = list.findIndex(x => (x.email && x.email === trader.email) || (x.username && x.username === trader.username) || (x.user_id && x.user_id === trader.id));
-                if (existingIdx >= 0) {
-                    list[existingIdx] = { ...list[existingIdx], ...trader };
-                } else {
-                    list.push(trader);
-                }
-            });
-        }
-
-        // 4. Merge current logged-in user
+        // 3. Merge current logged-in user if present
         if (currentUser) {
-            const myIdx = list.findIndex(x => (x.email && x.email === currentUser.email) || (x.user_id && (x.user_id === currentUser.id || x.user_id === currentUser.user_id)));
+            const myIdx = list.findIndex(x => 
+                (x.email && currentUser.email && x.email.toLowerCase() === currentUser.email.toLowerCase()) || 
+                (x.user_id && (x.user_id === currentUser.id || x.user_id === currentUser.user_id)) ||
+                (x.id && (x.id === currentUser.id || x.id === currentUser.user_id)) ||
+                ((x.display_name && x.display_name.toLowerCase() === "musa") && (currentUser.display_name && currentUser.display_name.toLowerCase() === "musa"))
+            );
             if (myIdx >= 0) {
-                list[myIdx] = { ...list[myIdx], ...currentUser };
+                const port = Math.max(parseFloat(list[myIdx].portfolio_value) || 0, parseFloat(currentUser.portfolio_value) || 0);
+                list[myIdx] = { ...list[myIdx], ...currentUser, portfolio_value: port };
             } else {
                 list.push({
-                    user_id: currentUser.id || currentUser.user_id || Date.now(),
+                    user_id: currentUser.id || currentUser.user_id || ("trader_" + Date.now()),
                     username: currentUser.username,
                     email: currentUser.email,
                     display_name: currentUser.display_name,
@@ -720,13 +708,6 @@ async function syncMustardAccount() {
 
             currentUser = updatedStats;
             localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
-
-            const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-            const idx = localTraders.findIndex(u => u.email === currentUser.email || u.id === uid);
-            if (idx >= 0) localTraders[idx] = currentUser;
-            else localTraders.push(currentUser);
-            localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
-
             pushCloudTrader(currentUser);
 
             renderNavLoggedIn(currentUser);
@@ -829,26 +810,16 @@ async function handleLogin(e) {
         const liveStats = await fetchMustardLiveStats(idToken, uid, email);
 
         // Keep existing custom display name if user has edited it before
-        const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-        const existing = localTraders.find(u => u.email === email || u.id === uid);
-        if (existing && existing.display_name && existing.display_name !== "Trader") {
-            liveStats.display_name = existing.display_name;
+        const prevUser = currentUser || JSON.parse(localStorage.getItem("mustard_current_user") || "null");
+        if (prevUser && prevUser.display_name && prevUser.display_name !== "Trader") {
+            liveStats.display_name = prevUser.display_name;
         }
         const palette = ["#FFC107", "#00E676", "#00D2FF", "#FF5252", "#E040FB", "#FF9100", "#7C4DFF"];
-        liveStats.avatar_color = existing && existing.avatar_color ? existing.avatar_color : palette[Math.floor(Math.random() * palette.length)];
+        liveStats.avatar_color = prevUser && prevUser.avatar_color ? prevUser.avatar_color : palette[Math.floor(Math.random() * palette.length)];
 
         // Save session tokens for background re-sync
         liveStats.idToken = idToken;
         liveStats.refreshToken = refreshToken;
-
-        // Update local list
-        const idx = localTraders.findIndex(u => u.email === email || u.id === uid);
-        if (idx >= 0) {
-            localTraders[idx] = liveStats;
-        } else {
-            localTraders.push(liveStats);
-        }
-        localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
 
         currentUser = liveStats;
         localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
@@ -925,18 +896,10 @@ async function handleRegister(e) {
         last_updated: new Date().toISOString()
     };
 
-    const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-    const existingIdx = localTraders.findIndex(u => u.email === email);
-    if (existingIdx >= 0) {
-        localTraders[existingIdx] = { ...localTraders[existingIdx], ...newUser };
-    } else {
-        localTraders.push(newUser);
-    }
-    localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
-    
     currentUser = newUser;
     localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
     document.cookie = `session_user=${encodeURIComponent(email)}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
+    pushCloudTrader(currentUser);
 
     closeModal("register-modal");
     renderNavLoggedIn(currentUser);
@@ -973,13 +936,6 @@ async function handleSaveDisplayName(e) {
     if (currentUser) {
         currentUser.display_name = newName;
         localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
-
-        const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-        const idx = localTraders.findIndex(u => u.email === currentUser.email || u.username === currentUser.username);
-        if (idx >= 0) {
-            localTraders[idx].display_name = newName;
-            localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
-        }
 
         // Broadcast to global cloud store so all other devices see the new nickname
         pushCloudTrader(currentUser);
@@ -1055,15 +1011,7 @@ async function handleUpdateStats(e) {
             last_updated: new Date().toISOString()
         };
         localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
-
-        const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-        const idx = localTraders.findIndex(u => u.email === currentUser.email || u.username === currentUser.username);
-        if (idx >= 0) {
-            localTraders[idx] = currentUser;
-        } else {
-            localTraders.push(currentUser);
-        }
-        localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
+        pushCloudTrader(currentUser);
     }
 
     closeModal("update-balance-modal");
