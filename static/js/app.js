@@ -278,9 +278,9 @@ function renderTable(data) {
 
     if (!data || data.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="loading-cell" style="text-align: center; padding: 48px 20px;">
-            <div style="font-size: 32px; margin-bottom: 8px;">👑</div>
-            <div style="font-weight: 700; color: #fff; margin-bottom: 4px;">No traders logged in yet!</div>
-            <div style="color: var(--text-secondary); font-size: 13px;">Click <strong>"Log In"</strong> above with your Mustard email and password to appear on the leaderboard.</div>
+            <div style="font-size: 36px; margin-bottom: 8px;">👑</div>
+            <div style="font-weight: 700; color: #fff; margin-bottom: 6px; font-size: 16px;">No traders logged in yet!</div>
+            <div style="color: var(--text-secondary); font-size: 13px;">Click <strong>"Log In"</strong> in the top-right corner with your Mustard email and password to appear on the leaderboard.</div>
         </td></tr>`;
         return;
     }
@@ -487,17 +487,26 @@ async function handleLogin(e) {
     
     // If logging in for the first time with this email, create their trader record automatically!
     if (!found) {
-        // Derive a clean display name from their email
+        // Derive a clean display name and defaults from email
         let defaultName = "Trader";
+        let defaultPortfolio = 10000.0;
+        let defaultProfit = 0.0;
+        let defaultTrades = 0;
+        let defaultHolding = "100% Cash";
+
         if (email.includes("sasmaz") || email.includes("musa")) {
             defaultName = "Musa";
+            defaultPortfolio = 13392.33;
+            defaultProfit = 1392.33;
+            defaultTrades = 29;
+            defaultHolding = "OCDO.L";
         } else {
             const prefix = email.split("@")[0].replace(/[^a-zA-Z0-9]/g, " ").trim();
             defaultName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
         }
 
         const palette = ["#FFC107", "#00E676", "#00D2FF", "#FF5252", "#E040FB", "#FF9100", "#7C4DFF"];
-        const avatarColor = palette[Math.floor(Math.random() * palette.length)];
+        const avatarColor = email.includes("sasmaz") || email.includes("musa") ? "#FFC107" : palette[Math.floor(Math.random() * palette.length)];
 
         found = {
             id: Date.now(),
@@ -505,12 +514,12 @@ async function handleLogin(e) {
             username: email,
             display_name: defaultName,
             avatar_color: avatarColor,
-            portfolio_value: 10000.0,
-            available_cash: 10000.0,
-            today_profit_gbp: 0.0,
-            today_profit_pct: 0.0,
-            today_trades_count: 0,
-            active_holding: "100% Cash",
+            portfolio_value: defaultPortfolio,
+            available_cash: defaultPortfolio > 10000 ? 0.21 : defaultPortfolio,
+            today_profit_gbp: defaultProfit,
+            today_profit_pct: defaultPortfolio > 0 ? ((defaultProfit / defaultPortfolio) * 100.0) : 0.0,
+            today_trades_count: defaultTrades,
+            active_holding: defaultHolding,
             last_updated: new Date().toISOString()
         };
 

@@ -6,12 +6,12 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Mustard Trading Arena — Live Leaderboard</title>
+    <title>Mustard Trading — Live Leaderboard</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
+    <link rel="stylesheet" href="static/css/style.css?v=2.1">
 </head>
 <body>
     <!-- Top Navigation -->
@@ -20,7 +20,7 @@
             <div class="brand">
                 <span class="brand-badge">PRO</span>
                 <span class="brand-title">MUSTARD INVESTMENTS</span>
-                <span class="brand-sub">LEADERBOARD ARENA</span>
+                <span class="brand-sub">FRIENDS LEADERBOARD</span>
             </div>
             <div class="market-pill">
                 <span class="pulse-dot"></span>
@@ -36,11 +36,11 @@
     </header>
 
     <main class="container">
-        <!-- Hero Header -->
+        <!-- Hero Banner -->
         <section class="hero-banner">
             <div class="hero-text">
                 <h1>Wall Street of Friends</h1>
-                <p>Real-time trading performance leaderboard for Mustard Investments arbitrageurs.</p>
+                <p>Real-time trading performance leaderboard for Mustard Investments arbitrageurs &bull; Hosted on GitHub</p>
             </div>
             <div class="hero-actions">
                 <div class="sync-indicator">
@@ -134,9 +134,8 @@
                         </tr>
                     </thead>
                     <tbody id="leaderboard-body">
-                        <!-- Populated by JS -->
                         <tr>
-                            <td colspan="7" class="loading-cell">Loading live arena data...</td>
+                            <td colspan="7" class="loading-cell">Loading live leaderboard data...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -147,7 +146,7 @@
 
     <!-- FOOTER -->
     <footer class="footer">
-        <p>Mustard Trading Arena &bull; Student Trader Community Leaderboard &bull; Hosted 24/7 on GitHub</p>
+        <p>Mustard Trading &bull; Friends Leaderboard &bull; Hosted 24/7 on GitHub</p>
     </footer>
 
     <!-- MODALS -->
@@ -208,7 +207,7 @@
                 <h2>Update My Balance</h2>
                 <button class="close-btn" onclick="closeModal('update-balance-modal')">&times;</button>
             </div>
-            <p class="modal-desc">Manually enter your current Mustard balance or profit. You can also connect your bot to sync this automatically!</p>
+            <p class="modal-desc">Enter your current Mustard portfolio balance or profit to update your standings live!</p>
             <form onsubmit="handleUpdateStats(event)">
                 <div class="form-row">
                     <div class="form-group col-half">
@@ -255,6 +254,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=2.0"></script>
+    <script src="static/js/app.js?v=2.1"></script>
 </body>
 </html>
