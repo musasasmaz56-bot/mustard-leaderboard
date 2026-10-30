@@ -31,8 +31,7 @@
 
         <div class="nav-right" id="nav-auth-container">
             <!-- Populated dynamically by JS based on auth state -->
-            <button class="btn btn-secondary" onclick="openModal('login-modal')">Log In</button>
-            <button class="btn btn-primary" onclick="openModal('register-modal')">Join Arena</button>
+            <button class="btn btn-primary" onclick="openModal('login-modal')">Log In</button>
         </div>
     </header>
 
@@ -159,10 +158,11 @@
                 <h2>Mustard Account Login</h2>
                 <button class="close-btn" onclick="closeModal('login-modal')">&times;</button>
             </div>
+            <p class="modal-desc" style="margin-bottom: 16px;">Log in with your Mustard email and password to view and update your ranking.</p>
             <form onsubmit="handleLogin(event)">
                 <div class="form-group">
                     <label>Mustard Email</label>
-                    <input type="email" id="login-email" required placeholder="e.g. student@school.co.uk" autocomplete="email">
+                    <input type="email" id="login-email" required placeholder="e.g. 22sasmazm@ccgrammarschool.co.uk" autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label>Password</label>
@@ -178,39 +178,6 @@
                 <div id="login-error" class="form-error"></div>
                 <button type="submit" class="btn btn-primary btn-block">Log In</button>
             </form>
-            <div class="modal-footer-text">
-                First time here? <a href="#" onclick="switchModal('login-modal', 'register-modal')">Set up your display name</a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Register Modal -->
-    <div class="modal-backdrop" id="register-modal">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h2>Join Trading Arena</h2>
-                <button class="close-btn" onclick="closeModal('register-modal')">&times;</button>
-            </div>
-            <form onsubmit="handleRegister(event)">
-                <div class="form-group">
-                    <label>Mustard Email</label>
-                    <input type="email" id="reg-email" required placeholder="e.g. student@school.co.uk" autocomplete="email">
-                </div>
-                <div class="form-group">
-                    <label>Display Name (Nickname)</label>
-                    <input type="text" id="reg-name" required placeholder="e.g. Musa">
-                    <small style="color: var(--text-muted); font-size: 11px; display: block; margin-top: 4px;">This is the name friends see on the leaderboard. You can change it anytime!</small>
-                </div>
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" id="reg-password" required placeholder="At least 4 characters" autocomplete="new-password">
-                </div>
-                <div id="register-error" class="form-error"></div>
-                <button type="submit" class="btn btn-primary btn-block">Join Leaderboard</button>
-            </form>
-            <div class="modal-footer-text">
-                Already registered? <a href="#" onclick="switchModal('register-modal', 'login-modal')">Log in here</a>
-            </div>
         </div>
     </div>
 

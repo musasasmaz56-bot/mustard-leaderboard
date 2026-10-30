@@ -279,8 +279,8 @@ function renderTable(data) {
     if (!data || data.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="loading-cell" style="text-align: center; padding: 48px 20px;">
             <div style="font-size: 32px; margin-bottom: 8px;">👑</div>
-            <div style="font-weight: 700; color: #fff; margin-bottom: 4px;">No traders registered yet!</div>
-            <div style="color: var(--text-secondary); font-size: 13px;">Click <strong>"Join Arena"</strong> above to register your account and appear on the leaderboard.</div>
+            <div style="font-weight: 700; color: #fff; margin-bottom: 4px;">No traders logged in yet!</div>
+            <div style="color: var(--text-secondary); font-size: 13px;">Click <strong>"Log In"</strong> above with your Mustard email and password to appear on the leaderboard.</div>
         </td></tr>`;
         return;
     }
@@ -441,12 +441,11 @@ function renderNavLoggedIn(user) {
 function renderNavLoggedOut() {
     const container = document.getElementById("nav-auth-container");
     container.innerHTML = `
-        <button class="btn btn-secondary" onclick="openModal('login-modal')">Log In</button>
-        <button class="btn btn-primary" onclick="openModal('register-modal')">Join Arena</button>
+        <button class="btn btn-primary" onclick="openModal('login-modal')">Log In</button>
     `;
 }
 
-// --- Login / Register Handlers (Mustard Email & Password) ---
+// --- Login Handler (Mustard Email & Password) ---
 async function handleLogin(e) {
     e.preventDefault();
     const errorEl = document.getElementById("login-error");
@@ -455,6 +454,12 @@ async function handleLogin(e) {
     const email = document.getElementById("login-email").value.trim().toLowerCase();
     const password = document.getElementById("login-password").value;
     const rememberMe = document.getElementById("login-remember") ? document.getElementById("login-remember").checked : true;
+
+    if (!email || !password) {
+        errorEl.textContent = "Please enter both your Mustard email and password.";
+        errorEl.style.display = "block";
+        return;
+    }
 
     try {
         const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
@@ -476,14 +481,41 @@ async function handleLogin(e) {
         // Fallback to client-side auth for GitHub Pages
     }
 
-    // Client-side authentication fallback for GitHub Pages
+    // Client-side authentication & instant auto-onboarding for GitHub Pages
     const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
     let found = localTraders.find(u => u.email === email || u.username === email);
     
+    // If logging in for the first time with this email, create their trader record automatically!
     if (!found) {
-        errorEl.textContent = "Account not found with this email. Click 'Set up your display name' below to get started!";
-        errorEl.style.display = "block";
-        return;
+        // Derive a clean display name from their email
+        let defaultName = "Trader";
+        if (email.includes("sasmaz") || email.includes("musa")) {
+            defaultName = "Musa";
+        } else {
+            const prefix = email.split("@")[0].replace(/[^a-zA-Z0-9]/g, " ").trim();
+            defaultName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+        }
+
+        const palette = ["#FFC107", "#00E676", "#00D2FF", "#FF5252", "#E040FB", "#FF9100", "#7C4DFF"];
+        const avatarColor = palette[Math.floor(Math.random() * palette.length)];
+
+        found = {
+            id: Date.now(),
+            email: email,
+            username: email,
+            display_name: defaultName,
+            avatar_color: avatarColor,
+            portfolio_value: 10000.0,
+            available_cash: 10000.0,
+            today_profit_gbp: 0.0,
+            today_profit_pct: 0.0,
+            today_trades_count: 0,
+            active_holding: "100% Cash",
+            last_updated: new Date().toISOString()
+        };
+
+        localTraders.push(found);
+        localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
     }
 
     currentUser = found;
