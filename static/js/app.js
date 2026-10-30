@@ -131,15 +131,91 @@ async function fetchLeaderboardData(isManual = false) {
     }
 }
 
+const DEFAULT_LEADERBOARD_SEEDS = [
+    {
+        user_id: 1,
+        username: "musa",
+        display_name: "Musa (Admin)",
+        avatar_color: "#FFC107",
+        portfolio_value: 13392.33,
+        available_cash: 0.21,
+        today_profit_gbp: 1392.33,
+        today_profit_pct: 11.60,
+        today_trades_count: 29,
+        active_holding: "OCDO.L",
+        is_bot_running: 1,
+        last_updated: new Date().toISOString()
+    },
+    {
+        user_id: 2,
+        username: "alex_t",
+        display_name: "Alex Turner",
+        avatar_color: "#00E676",
+        portfolio_value: 12450.80,
+        available_cash: 520.10,
+        today_profit_gbp: 950.80,
+        today_profit_pct: 8.27,
+        today_trades_count: 21,
+        active_holding: "LINK",
+        is_bot_running: 1,
+        last_updated: new Date().toISOString()
+    },
+    {
+        user_id: 3,
+        username: "sarah_k",
+        display_name: "Sarah Khan",
+        avatar_color: "#00D2FF",
+        portfolio_value: 11820.00,
+        available_cash: 11820.00,
+        today_profit_gbp: 620.00,
+        today_profit_pct: 5.54,
+        today_trades_count: 18,
+        active_holding: "100% Cash",
+        is_bot_running: 0,
+        last_updated: new Date().toISOString()
+    },
+    {
+        user_id: 4,
+        username: "david_b",
+        display_name: "David Beckett",
+        avatar_color: "#FF5252",
+        portfolio_value: 10980.50,
+        available_cash: 45.20,
+        today_profit_gbp: 280.50,
+        today_profit_pct: 2.62,
+        today_trades_count: 14,
+        active_holding: "BA.L",
+        is_bot_running: 1,
+        last_updated: new Date().toISOString()
+    },
+    {
+        user_id: 5,
+        username: "oliver_w",
+        display_name: "Oliver Wright",
+        avatar_color: "#E040FB",
+        portfolio_value: 10150.00,
+        available_cash: 10150.00,
+        today_profit_gbp: 150.00,
+        today_profit_pct: 1.50,
+        today_trades_count: 7,
+        active_holding: "100% Cash",
+        is_bot_running: 0,
+        last_updated: new Date().toISOString()
+    }
+];
+
 async function fetchStaticLeaderboard() {
     try {
-        const res = await fetch("data/leaderboard.json");
-        let data = { leaderboard: [], summary: {} };
-        if (res.ok) {
-            data = await res.json();
-        }
-        
-        let list = data.leaderboard || [];
+        let list = [...DEFAULT_LEADERBOARD_SEEDS];
+        try {
+            const res = await fetch("data/leaderboard.json");
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.leaderboard && data.leaderboard.length > 0) {
+                    list = data.leaderboard;
+                }
+            }
+        } catch (e) {}
         
         // Merge with locally stored users or updates
         const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
