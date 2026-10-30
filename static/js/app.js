@@ -243,15 +243,37 @@ function renderKPIs(summary) {
     if (tradesValEl) tradesValEl.textContent = `${summary.total_trades || 0}`;
 }
 
+// --- Dedicated Ranking & Sorting Helper ---
+function sortLeaderboardList(list) {
+    if (!list || !Array.isArray(list)) return;
+    if (currentTab === "all-time") {
+        // Sort strictly in order of who has the MOST TOTAL MONEY
+        list.sort((a, b) => (parseFloat(b.portfolio_value) || 0) - (parseFloat(a.portfolio_value) || 0));
+    } else {
+        // Sort strictly in order of who MADE THE MOST MONEY TODAY
+        list.sort((a, b) => (parseFloat(b.today_profit_gbp) || 0) - (parseFloat(a.today_profit_gbp) || 0));
+    }
+}
+
 // --- Render Table ---
 function renderTable(data) {
     const tbody = document.getElementById("leaderboard-body");
-    const thPrimary = document.getElementById("th-primary-metric");
     
-    if (currentTab === "all-time") {
-        thPrimary.textContent = "TOTAL WEALTH";
-    } else {
-        thPrimary.textContent = "TODAY'S PROFIT";
+    // Header visual cues
+    const thWealth = document.getElementById("th-wealth");
+    const thProfit = document.getElementById("th-profit");
+    if (thWealth && thProfit) {
+        if (currentTab === "all-time") {
+            thWealth.style.color = "var(--mustard-gold)";
+            thWealth.style.borderBottom = "2px solid var(--mustard-gold)";
+            thProfit.style.color = "var(--text-muted)";
+            thProfit.style.borderBottom = "none";
+        } else {
+            thWealth.style.color = "var(--text-muted)";
+            thWealth.style.borderBottom = "none";
+            thProfit.style.color = "var(--neon-green)";
+            thProfit.style.borderBottom = "2px solid var(--neon-green)";
+        }
     }
 
     if (!data || data.length === 0) {
@@ -263,32 +285,32 @@ function renderTable(data) {
         return;
     }
 
+    // Always ensure the data is properly sorted for the active tab
+    sortLeaderboardList(data);
+
     tbody.innerHTML = data.map((item, index) => {
         const rank = index + 1;
-        const isCurrent = currentUser && currentUser.id === item.user_id;
+        const isCurrent = currentUser && (currentUser.id === item.user_id || currentUser.email === item.email || currentUser.username === item.username);
         
         let rankHtml = `<span class="rank-badge rank-other">#${rank}</span>`;
         if (rank === 1) rankHtml = `<span class="rank-badge rank-1">👑 1</span>`;
         else if (rank === 2) rankHtml = `<span class="rank-badge rank-2">🥈 2</span>`;
         else if (rank === 3) rankHtml = `<span class="rank-badge rank-3">🥉 3</span>`;
 
-        const profitGbp = item.today_profit_gbp || 0;
-        const profitPct = item.today_profit_pct || 0;
+        const profitGbp = parseFloat(item.today_profit_gbp) || 0;
+        const profitPct = parseFloat(item.today_profit_pct) || 0;
         const profitClass = profitGbp >= 0 ? "text-green" : "text-red";
         const profitSign = profitGbp >= 0 ? "+" : "-";
         const profitStr = `${profitSign}£${Math.abs(profitGbp).toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-        // Primary highlight metric depending on tab
-        const primaryMetricHtml = currentTab === "all-time"
-            ? `<div class="mono-val val-large text-gold">${formatGBP(item.portfolio_value)}</div>`
-            : `<div class="mono-val val-large ${profitClass}">${profitStr} <span class="sub-pct">(${profitPct.toFixed(2)}%)</span></div>`;
+        // Column 3 is ALWAYS Total Wealth
+        const totalWealthHtml = `<div class="mono-val val-large ${currentTab === 'all-time' ? 'text-gold' : ''}" style="${currentTab === 'all-time' ? 'font-weight: 800;' : 'opacity: 0.85;'}">${formatGBP(item.portfolio_value)}</div>`;
 
-        const secondaryMetricHtml = currentTab === "all-time"
-            ? `<span class="mono-val ${profitClass}">${profitStr}</span> <span class="sub-pct ${profitClass}">(${profitPct.toFixed(2)}%)</span>`
-            : `<span class="mono-val text-gold">${formatGBP(item.portfolio_value)}</span>`;
+        // Column 4 is ALWAYS Today's Profit
+        const todayProfitHtml = `<div class="mono-val val-large ${profitClass}" style="${currentTab === 'today' ? 'font-weight: 800;' : ''}">${profitStr} <span class="sub-pct">(${profitPct.toFixed(2)}%)</span></div>`;
 
         const avatarColor = item.avatar_color || "#00E676";
-        const initials = item.display_name ? item.display_name.charAt(0).toUpperCase() : "T";
+        const initials = item.display_name ? item.display_name.charAt(0).toUpperCase() : "M";
         const syncTimeStr = formatTimeAgo(item.last_updated);
 
         return `
@@ -308,8 +330,8 @@ function renderTable(data) {
                         </div>
                     </div>
                 </td>
-                <td class="text-right">${primaryMetricHtml}</td>
-                <td class="text-right">${secondaryMetricHtml}</td>
+                <td class="text-right">${totalWealthHtml}</td>
+                <td class="text-right">${todayProfitHtml}</td>
                 <td class="text-center">
                     <span class="tag-quota">${item.today_trades_count || 0} / 50</span>
                 </td>
@@ -324,7 +346,7 @@ function renderTable(data) {
     }).join("");
 }
 
-// --- Tab Switching ---
+// --- Tab Switching (Instantaneous Re-ranking) ---
 function switchTab(tab) {
     if (currentTab === tab) return;
     currentTab = tab;
@@ -332,7 +354,14 @@ function switchTab(tab) {
     document.getElementById("tab-all-time").classList.toggle("active", tab === "all-time");
     document.getElementById("tab-today").classList.toggle("active", tab === "today");
     
-    fetchLeaderboardData(true);
+    // Instantly sort rows in order of the chosen tab!
+    sortLeaderboardList(leaderboardData);
+    renderTable(leaderboardData);
+
+    const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+    if (!isStaticHost) {
+        fetchLeaderboardData(true);
+    }
 }
 
 // --- Search Filter ---
