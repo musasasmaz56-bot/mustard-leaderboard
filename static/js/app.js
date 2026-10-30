@@ -96,32 +96,117 @@ async function fetchLeaderboardData(isManual = false) {
     if (isManual && btn) btn.style.transform = "rotate(180deg)";
 
     try {
-        const endpoint = currentTab === "all-time" 
-            ? "/api/leaderboard/all-time" 
-            : "/api/leaderboard/today";
+        const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
         
-        const [lbRes, summaryRes] = await Promise.all([
-            fetch(endpoint),
-            fetch("/api/stats/summary")
-        ]);
+        if (!isStaticHost) {
+            const endpoint = currentTab === "all-time" 
+                ? "/api/leaderboard/all-time" 
+                : "/api/leaderboard/today";
+            
+            const [lbRes, summaryRes] = await Promise.all([
+                fetch(endpoint),
+                fetch("/api/stats/summary")
+            ]);
 
-        if (lbRes.ok) {
-            const data = await lbRes.json();
-            leaderboardData = data.leaderboard || [];
-            renderTable(leaderboardData);
+            if (lbRes.ok && summaryRes.ok) {
+                const data = await lbRes.json();
+                leaderboardData = data.leaderboard || [];
+                renderTable(leaderboardData);
+                const summary = await summaryRes.json();
+                renderKPIs(summary);
+                return;
+            }
         }
-
-        if (summaryRes.ok) {
-            const summary = await summaryRes.json();
-            renderKPIs(summary);
-        }
+        
+        // Static GitHub Pages / JSON Fallback
+        await fetchStaticLeaderboard();
     } catch (err) {
-        console.error("Failed to fetch live leaderboard:", err);
+        console.warn("API unavailable, using static/local leaderboard:", err);
+        await fetchStaticLeaderboard();
     } finally {
         if (isManual && btn) {
             setTimeout(() => { btn.style.transform = "none"; }, 300);
             refreshCountdown = 10;
         }
+    }
+}
+
+async function fetchStaticLeaderboard() {
+    try {
+        const res = await fetch("data/leaderboard.json");
+        let data = { leaderboard: [], summary: {} };
+        if (res.ok) {
+            data = await res.json();
+        }
+        
+        let list = data.leaderboard || [];
+        
+        // Merge with locally stored users or updates
+        const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
+        if (localTraders.length > 0) {
+            localTraders.forEach(trader => {
+                const existingIdx = list.findIndex(x => x.username === trader.username);
+                if (existingIdx >= 0) {
+                    list[existingIdx] = { ...list[existingIdx], ...trader };
+                } else {
+                    list.push(trader);
+                }
+            });
+        }
+
+        // Also merge current user if logged in locally
+        if (currentUser) {
+            const myIdx = list.findIndex(x => x.username === currentUser.username);
+            if (myIdx >= 0) {
+                list[myIdx] = { ...list[myIdx], ...currentUser };
+            } else {
+                list.push({
+                    user_id: currentUser.id || 99,
+                    username: currentUser.username,
+                    display_name: currentUser.display_name,
+                    avatar_color: currentUser.avatar_color || "#FFC107",
+                    portfolio_value: currentUser.portfolio_value || 10000.0,
+                    available_cash: currentUser.available_cash || 0.0,
+                    today_profit_gbp: currentUser.today_profit_gbp || 0.0,
+                    today_profit_pct: currentUser.today_profit_pct || 0.0,
+                    today_trades_count: currentUser.today_trades_count || 0,
+                    active_holding: currentUser.active_holding || "100% Cash",
+                    is_bot_running: currentUser.is_bot_running || 0,
+                    last_updated: currentUser.last_updated || new Date().toISOString()
+                });
+            }
+        }
+
+        // Sort based on current tab
+        if (currentTab === "all-time") {
+            list.sort((a, b) => (b.portfolio_value || 0) - (a.portfolio_value || 0));
+        } else {
+            list.sort((a, b) => (b.today_profit_gbp || 0) - (a.today_profit_gbp || 0));
+        }
+
+        leaderboardData = list;
+        renderTable(leaderboardData);
+
+        // Compute summary metrics
+        const totalWealth = list.reduce((acc, curr) => acc + (curr.portfolio_value || 0), 0);
+        const totalProfit = list.reduce((acc, curr) => acc + (curr.today_profit_gbp || 0), 0);
+        const totalTrades = list.reduce((acc, curr) => acc + (curr.today_trades_count || 0), 0);
+        const activeBots = list.filter(x => x.is_bot_running).length;
+        
+        const sortedWealth = [...list].sort((a, b) => (b.portfolio_value || 0) - (a.portfolio_value || 0));
+        const sortedToday = [...list].sort((a, b) => (b.today_profit_gbp || 0) - (a.today_profit_gbp || 0));
+
+        renderKPIs({
+            total_wealth: totalWealth,
+            total_today_profit: totalProfit,
+            total_trades: totalTrades,
+            active_traders: list.length,
+            active_bots: activeBots,
+            top_wealth: sortedWealth[0],
+            top_today: sortedToday[0]
+        });
+    } catch (e) {
+        console.error("Static leaderboard failed to load:", e);
     }
 }
 
@@ -264,18 +349,32 @@ function filterTable() {
 // --- Auth State ---
 async function checkAuth() {
     try {
-        const res = await fetch("/api/user/me");
-        if (res.ok) {
-            const data = await res.json();
-            if (data.authenticated && data.user) {
-                currentUser = data.user;
-                renderNavLoggedIn(currentUser);
-                return;
+        const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+        if (!isStaticHost) {
+            const res = await fetch("/api/user/me");
+            if (res.ok) {
+                const data = await res.json();
+                if (data.authenticated && data.user) {
+                    currentUser = data.user;
+                    renderNavLoggedIn(currentUser);
+                    return;
+                }
             }
         }
     } catch (e) {
-        console.error("Auth check failed:", e);
+        // Fall back to local cookie / storage
     }
+
+    // Check localStorage / cookie for session
+    const storedUser = localStorage.getItem("mustard_current_user");
+    if (storedUser) {
+        try {
+            currentUser = JSON.parse(storedUser);
+            renderNavLoggedIn(currentUser);
+            return;
+        } catch {}
+    }
+
     currentUser = null;
     renderNavLoggedOut();
 }
@@ -320,30 +419,67 @@ async function handleLogin(e) {
     const errorEl = document.getElementById("login-error");
     errorEl.style.display = "none";
 
-    const username = document.getElementById("login-username").value.trim();
+    const username = document.getElementById("login-username").value.trim().toLowerCase();
     const password = document.getElementById("login-password").value;
     const rememberMe = document.getElementById("login-remember") ? document.getElementById("login-remember").checked : true;
 
     try {
-        const res = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password, remember_me: rememberMe })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            errorEl.textContent = data.detail || "Login failed.";
+        const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+        if (!isStaticHost) {
+            const res = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password, remember_me: rememberMe })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeModal("login-modal");
+                await checkAuth();
+                fetchLeaderboardData(true);
+                return;
+            }
+        }
+    } catch (err) {
+        // Fallback to client-side auth for GitHub Pages
+    }
+
+    // Client-side authentication fallback for GitHub Pages
+    const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
+    let found = localTraders.find(u => u.username === username);
+    
+    // Check default accounts
+    if (!found) {
+        if (username === "musa") {
+            found = {
+                id: 1,
+                username: "musa",
+                display_name: "Musa (Admin)",
+                avatar_color: "#FFC107",
+                portfolio_value: 13392.33,
+                available_cash: 0.21,
+                today_profit_gbp: 1392.33,
+                today_profit_pct: 11.60,
+                today_trades_count: 29,
+                active_holding: "OCDO.L",
+                is_bot_running: 1,
+                api_key: "mb_live_musa_secret_key"
+            };
+        } else {
+            errorEl.textContent = "Account not found. Please click 'Sign up here' below!";
             errorEl.style.display = "block";
             return;
         }
-
-        closeModal("login-modal");
-        await checkAuth();
-        fetchLeaderboardData(true);
-    } catch (err) {
-        errorEl.textContent = "Network error. Please try again.";
-        errorEl.style.display = "block";
     }
+
+    currentUser = found;
+    localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
+    if (rememberMe) {
+        document.cookie = `session_user=${username}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
+    }
+
+    closeModal("login-modal");
+    renderNavLoggedIn(currentUser);
+    fetchLeaderboardData(true);
 }
 
 async function handleRegister(e) {
@@ -352,41 +488,72 @@ async function handleRegister(e) {
     errorEl.style.display = "none";
 
     const display_name = document.getElementById("reg-name").value.trim();
-    const username = document.getElementById("reg-username").value.trim();
+    const username = document.getElementById("reg-username").value.trim().toLowerCase();
     const password = document.getElementById("reg-password").value;
     const mustard_email = document.getElementById("reg-email").value.trim();
 
     try {
-        const res = await fetch("/api/auth/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ display_name, username, password, mustard_email })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            errorEl.textContent = data.detail || "Registration failed.";
-            errorEl.style.display = "block";
-            return;
+        const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+        if (!isStaticHost) {
+            const res = await fetch("/api/auth/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ display_name, username, password, mustard_email })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                closeModal("register-modal");
+                await checkAuth();
+                fetchLeaderboardData(true);
+                return;
+            }
         }
-
-        closeModal("register-modal");
-        await checkAuth();
-        fetchLeaderboardData(true);
     } catch (err) {
-        errorEl.textContent = "Network error. Please try again.";
-        errorEl.style.display = "block";
+        // Fallback to client-side registration for GitHub Pages
     }
+
+    // Client-side registration for GitHub Pages
+    const palette = ["#00E676", "#FFC107", "#00D2FF", "#FF5252", "#E040FB", "#FF9100", "#7C4DFF"];
+    const avatarColor = palette[Math.floor(Math.random() * palette.length)];
+    
+    const newUser = {
+        id: Date.now(),
+        username: username,
+        display_name: display_name,
+        avatar_color: avatarColor,
+        portfolio_value: 10000.0,
+        available_cash: 10000.0,
+        today_profit_gbp: 0.0,
+        today_profit_pct: 0.0,
+        today_trades_count: 0,
+        active_holding: "100% Cash",
+        is_bot_running: 0,
+        api_key: `mb_live_${Math.random().toString(36).substring(2, 15)}`,
+        last_updated: new Date().toISOString()
+    };
+
+    const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
+    localTraders.push(newUser);
+    localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
+    
+    currentUser = newUser;
+    localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
+    document.cookie = `session_user=${username}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
+
+    closeModal("register-modal");
+    renderNavLoggedIn(currentUser);
+    fetchLeaderboardData(true);
 }
 
 async function handleLogout() {
     try {
         await fetch("/api/auth/logout", { method: "POST" });
-        currentUser = null;
-        renderNavLoggedOut();
-        fetchLeaderboardData(true);
-    } catch (e) {
-        console.error("Logout failed:", e);
-    }
+    } catch (e) {}
+    currentUser = null;
+    localStorage.removeItem("mustard_current_user");
+    document.cookie = "session_user=; max-age=0; path=/;";
+    renderNavLoggedOut();
+    fetchLeaderboardData(true);
 }
 
 // --- Update Stats Modal Handlers ---
@@ -416,29 +583,49 @@ async function handleUpdateStats(e) {
         today_profit_gbp: parseFloat(document.getElementById("upd-today-profit").value) || 0.0,
         today_trades_count: parseInt(document.getElementById("upd-trades").value) || 0,
         active_holding: document.getElementById("upd-holding").value.trim() || "100% Cash",
-        is_bot_running: document.getElementById("upd-bot-running").checked
+        is_bot_running: document.getElementById("upd-bot-running").checked ? 1 : 0
     };
 
     try {
-        const res = await fetch("/api/user/update-stats", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            errorEl.textContent = data.detail || "Failed to update stats.";
-            errorEl.style.display = "block";
-            return;
+        const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
+        if (!isStaticHost) {
+            const res = await fetch("/api/user/update-stats", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                closeModal("update-balance-modal");
+                await checkAuth();
+                fetchLeaderboardData(true);
+                return;
+            }
         }
+    } catch (err) {}
 
-        closeModal("update-balance-modal");
-        await checkAuth();
-        fetchLeaderboardData(true);
-    } catch (err) {
-        errorEl.textContent = "Network error. Please try again.";
-        errorEl.style.display = "block";
+    // Update in memory & localStorage for GitHub Pages
+    if (currentUser) {
+        currentUser = {
+            ...currentUser,
+            ...payload,
+            today_profit_pct: ((payload.today_profit_gbp / 10000.0) * 100.0),
+            last_updated: new Date().toISOString()
+        };
+        localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
+
+        const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
+        const idx = localTraders.findIndex(u => u.username === currentUser.username);
+        if (idx >= 0) {
+            localTraders[idx] = currentUser;
+        } else {
+            localTraders.push(currentUser);
+        }
+        localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
     }
+
+    closeModal("update-balance-modal");
+    renderNavLoggedIn(currentUser);
+    fetchLeaderboardData(true);
 }
 
 // --- API Key & Webhook Guide Modal ---
