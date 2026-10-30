@@ -140,21 +140,11 @@
             </div>
         </section>
 
-        <!-- Bot Integration Banner -->
-        <section class="integration-banner">
-            <div class="banner-left">
-                <h3>🤖 Want your trading bot to update automatically?</h3>
-                <p>Connect your Mustard Arbitrage bot or custom script in 3 lines of code!</p>
-            </div>
-            <div class="banner-right">
-                <button class="btn btn-outline" onclick="openApiDocsModal()">View Bot Guide</button>
-            </div>
-        </section>
     </main>
 
     <!-- FOOTER -->
     <footer class="footer">
-        <p>Mustard Trading Arena &bull; High Frequency Latency Arbitrage Community &bull; Hosted 24/7 on GitHub</p>
+        <p>Mustard Trading Arena &bull; Student Trader Community Leaderboard &bull; Hosted 24/7 on GitHub</p>
     </footer>
 
     <!-- MODALS -->
@@ -163,13 +153,13 @@
     <div class="modal-backdrop" id="login-modal">
         <div class="modal-box">
             <div class="modal-header">
-                <h2>Log In to Arena</h2>
+                <h2>Mustard Account Login</h2>
                 <button class="close-btn" onclick="closeModal('login-modal')">&times;</button>
             </div>
             <form onsubmit="handleLogin(event)">
                 <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="login-username" required placeholder="e.g. musa" autocomplete="username">
+                    <label>Mustard Email</label>
+                    <input type="email" id="login-email" required placeholder="e.g. student@school.co.uk" autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label>Password</label>
@@ -186,7 +176,7 @@
                 <button type="submit" class="btn btn-primary btn-block">Log In</button>
             </form>
             <div class="modal-footer-text">
-                Don't have an account? <a href="#" onclick="switchModal('login-modal', 'register-modal')">Sign up here</a>
+                First time here? <a href="#" onclick="switchModal('login-modal', 'register-modal')">Set up your display name</a>
             </div>
         </div>
     </div>
@@ -200,27 +190,43 @@
             </div>
             <form onsubmit="handleRegister(event)">
                 <div class="form-group">
-                    <label>Display Name (Nickname)</label>
-                    <input type="text" id="reg-name" required placeholder="e.g. Musa (Arbitrage King)">
+                    <label>Mustard Email</label>
+                    <input type="email" id="reg-email" required placeholder="e.g. student@school.co.uk" autocomplete="email">
                 </div>
                 <div class="form-group">
-                    <label>Username (Unique Handle)</label>
-                    <input type="text" id="reg-username" required placeholder="e.g. musa" autocomplete="username">
+                    <label>Display Name (Nickname)</label>
+                    <input type="text" id="reg-name" required placeholder="e.g. Musa">
+                    <small style="color: var(--text-muted); font-size: 11px; display: block; margin-top: 4px;">This is the name friends see on the leaderboard. You can change it anytime!</small>
                 </div>
                 <div class="form-group">
                     <label>Password</label>
                     <input type="password" id="reg-password" required placeholder="At least 4 characters" autocomplete="new-password">
                 </div>
-                <div class="form-group">
-                    <label>Mustard Account Email (Optional)</label>
-                    <input type="email" id="reg-email" placeholder="e.g. student@school.co.uk">
-                </div>
                 <div id="register-error" class="form-error"></div>
-                <button type="submit" class="btn btn-primary btn-block">Create Trader Account</button>
+                <button type="submit" class="btn btn-primary btn-block">Join Leaderboard</button>
             </form>
             <div class="modal-footer-text">
                 Already registered? <a href="#" onclick="switchModal('register-modal', 'login-modal')">Log in here</a>
             </div>
+        </div>
+    </div>
+
+    <!-- Edit Display Name Modal -->
+    <div class="modal-backdrop" id="edit-name-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>Change Display Name</h2>
+                <button class="close-btn" onclick="closeModal('edit-name-modal')">&times;</button>
+            </div>
+            <form onsubmit="handleSaveDisplayName(event)">
+                <div class="form-group">
+                    <label>New Display Name</label>
+                    <input type="text" id="edit-new-name" required placeholder="e.g. Musa (Top Trader)">
+                    <small style="color: var(--text-muted); font-size: 11px; display: block; margin-top: 4px;">Updates your name live on the leaderboard table immediately.</small>
+                </div>
+                <div id="edit-name-error" class="form-error"></div>
+                <button type="submit" class="btn btn-primary btn-block">Save Name</button>
+            </form>
         </div>
     </div>
 
@@ -260,31 +266,6 @@
                 <div id="update-error" class="form-error"></div>
                 <button type="submit" class="btn btn-primary btn-block">Save Live Stats</button>
             </form>
-        </div>
-    </div>
-
-    <!-- API Key & Webhook Guide Modal -->
-    <div class="modal-backdrop" id="api-modal">
-        <div class="modal-box modal-wide">
-            <div class="modal-header">
-                <h2>Bot Integration Guide</h2>
-                <button class="close-btn" onclick="closeModal('api-modal')">&times;</button>
-            </div>
-            
-            <div id="api-key-section">
-                <!-- Populated by JS -->
-            </div>
-
-            <div class="api-instructions">
-                <h4>Syncing Stats Automatically:</h4>
-                <div class="code-snippet-box">
-                    <button class="copy-code-btn" onclick="copySnippet()">Copy Code</button>
-                    <pre><code id="python-snippet"># Mustard Arbitrage Terminal — Automatic Sync
-def update_arena(portfolio_val, cash, today_profit, trades_count, holding, is_running):
-    print(f"Stats updated: {portfolio_val} | Profit: {today_profit}")
-    # Updates your live standings directly on GitHub Pages!</code></pre>
-                </div>
-            </div>
         </div>
     </div>
 

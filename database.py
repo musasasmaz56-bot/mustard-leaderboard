@@ -76,10 +76,18 @@ def seed_sample_data(conn):
 def get_user_by_username(username: str):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username.strip(),))
+    clean = username.strip()
+    cursor.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(mustard_email) = LOWER(?)", (clean, clean))
     user = cursor.fetchone()
     conn.close()
     return user
+
+def update_user_display_name(user_id: int, new_display_name: str):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET display_name = ? WHERE id = ?", (new_display_name.strip(), user_id))
+    conn.commit()
+    conn.close()
 
 def get_user_by_id(user_id: int):
     conn = get_db()

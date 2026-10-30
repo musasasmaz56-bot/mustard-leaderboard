@@ -304,7 +304,7 @@ function renderTable(data) {
                                 ${escapeHtml(item.display_name)}
                                 ${isCurrent ? '<span class="you-tag">YOU</span>' : ''}
                             </span>
-                            <span class="trader-username">@${escapeHtml(item.username)}</span>
+                            <span class="trader-username">${escapeHtml(item.email || item.username || '')}</span>
                         </div>
                     </div>
                 </td>
@@ -385,20 +385,20 @@ async function checkAuth() {
 
 function renderNavLoggedIn(user) {
     const container = document.getElementById("nav-auth-container");
-    const initials = user.display_name ? user.display_name.charAt(0).toUpperCase() : "U";
+    const initials = user.display_name ? user.display_name.charAt(0).toUpperCase() : "M";
     
     container.innerHTML = `
-        <div class="user-profile-badge">
+        <div class="user-profile-badge" onclick="openEditNameModal()" style="cursor: pointer;" title="Click to change your display name">
             <div class="avatar-circle" style="background-color: ${user.avatar_color || '#00E676'};">
                 ${initials}
             </div>
             <div class="user-details">
-                <span class="user-name">${escapeHtml(user.display_name)}</span>
+                <span class="user-name">${escapeHtml(user.display_name)} ✏️</span>
                 <span class="user-val">${formatGBP(user.portfolio_value)}</span>
             </div>
         </div>
         <button class="btn btn-secondary" onclick="openUpdateModal()">Update Balance</button>
-        <button class="btn btn-outline" onclick="openApiDocsModal()">API Key</button>
+        <button class="btn btn-outline" onclick="openEditNameModal()">Edit Name</button>
         <button class="btn btn-icon" title="Log Out" onclick="handleLogout()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -417,13 +417,13 @@ function renderNavLoggedOut() {
     `;
 }
 
-// --- Login / Register Handlers ---
+// --- Login / Register Handlers (Mustard Email & Password) ---
 async function handleLogin(e) {
     e.preventDefault();
     const errorEl = document.getElementById("login-error");
     errorEl.style.display = "none";
 
-    const username = document.getElementById("login-username").value.trim().toLowerCase();
+    const email = document.getElementById("login-email").value.trim().toLowerCase();
     const password = document.getElementById("login-password").value;
     const rememberMe = document.getElementById("login-remember") ? document.getElementById("login-remember").checked : true;
 
@@ -433,7 +433,7 @@ async function handleLogin(e) {
             const res = await fetch("/api/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, password, remember_me: rememberMe })
+                body: JSON.stringify({ username: email, password, remember_me: rememberMe })
             });
             const data = await res.json();
             if (res.ok) {
@@ -449,36 +449,18 @@ async function handleLogin(e) {
 
     // Client-side authentication fallback for GitHub Pages
     const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-    let found = localTraders.find(u => u.username === username);
+    let found = localTraders.find(u => u.email === email || u.username === email);
     
-    // Check default accounts
     if (!found) {
-        if (username === "musa") {
-            found = {
-                id: 1,
-                username: "musa",
-                display_name: "Musa (Admin)",
-                avatar_color: "#FFC107",
-                portfolio_value: 13392.33,
-                available_cash: 0.21,
-                today_profit_gbp: 1392.33,
-                today_profit_pct: 11.60,
-                today_trades_count: 29,
-                active_holding: "OCDO.L",
-                is_bot_running: 1,
-                api_key: "mb_live_musa_secret_key"
-            };
-        } else {
-            errorEl.textContent = "Account not found. Please click 'Sign up here' below!";
-            errorEl.style.display = "block";
-            return;
-        }
+        errorEl.textContent = "Account not found with this email. Click 'Set up your display name' below to get started!";
+        errorEl.style.display = "block";
+        return;
     }
 
     currentUser = found;
     localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
     if (rememberMe) {
-        document.cookie = `session_user=${username}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
+        document.cookie = `session_user=${encodeURIComponent(email)}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
     }
 
     closeModal("login-modal");
@@ -491,10 +473,9 @@ async function handleRegister(e) {
     const errorEl = document.getElementById("register-error");
     errorEl.style.display = "none";
 
+    const email = document.getElementById("reg-email").value.trim().toLowerCase();
     const display_name = document.getElementById("reg-name").value.trim();
-    const username = document.getElementById("reg-username").value.trim().toLowerCase();
     const password = document.getElementById("reg-password").value;
-    const mustard_email = document.getElementById("reg-email").value.trim();
 
     try {
         const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
@@ -502,7 +483,7 @@ async function handleRegister(e) {
             const res = await fetch("/api/auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ display_name, username, password, mustard_email })
+                body: JSON.stringify({ display_name, username: email, password, mustard_email: email })
             });
             const data = await res.json();
             if (res.ok) {
@@ -522,7 +503,8 @@ async function handleRegister(e) {
     
     const newUser = {
         id: Date.now(),
-        username: username,
+        email: email,
+        username: email,
         display_name: display_name,
         avatar_color: avatarColor,
         portfolio_value: 10000.0,
@@ -531,21 +513,68 @@ async function handleRegister(e) {
         today_profit_pct: 0.0,
         today_trades_count: 0,
         active_holding: "100% Cash",
-        is_bot_running: 0,
-        api_key: `mb_live_${Math.random().toString(36).substring(2, 15)}`,
         last_updated: new Date().toISOString()
     };
 
     const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-    localTraders.push(newUser);
+    const existingIdx = localTraders.findIndex(u => u.email === email);
+    if (existingIdx >= 0) {
+        localTraders[existingIdx] = { ...localTraders[existingIdx], ...newUser };
+    } else {
+        localTraders.push(newUser);
+    }
     localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
     
     currentUser = newUser;
     localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
-    document.cookie = `session_user=${username}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
+    document.cookie = `session_user=${encodeURIComponent(email)}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
 
     closeModal("register-modal");
     renderNavLoggedIn(currentUser);
+    fetchLeaderboardData(true);
+}
+
+// --- Change Display Name Handlers ---
+function openEditNameModal() {
+    if (!currentUser) {
+        openModal("login-modal");
+        return;
+    }
+    const input = document.getElementById("edit-new-name");
+    if (input) input.value = currentUser.display_name || "";
+    const errorEl = document.getElementById("edit-name-error");
+    if (errorEl) errorEl.style.display = "none";
+    openModal("edit-name-modal");
+}
+
+async function handleSaveDisplayName(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById("edit-name-error");
+    if (errorEl) errorEl.style.display = "none";
+
+    const newName = document.getElementById("edit-new-name").value.trim();
+    if (!newName) {
+        if (errorEl) {
+            errorEl.textContent = "Please enter a valid display name.";
+            errorEl.style.display = "block";
+        }
+        return;
+    }
+
+    if (currentUser) {
+        currentUser.display_name = newName;
+        localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
+
+        const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
+        const idx = localTraders.findIndex(u => u.email === currentUser.email || u.username === currentUser.username);
+        if (idx >= 0) {
+            localTraders[idx].display_name = newName;
+            localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
+        }
+    }
+
+    closeModal("edit-name-modal");
+    if (currentUser) renderNavLoggedIn(currentUser);
     fetchLeaderboardData(true);
 }
 
@@ -571,8 +600,6 @@ function openUpdateModal() {
     document.getElementById("upd-today-profit").value = currentUser.today_profit_gbp || "";
     document.getElementById("upd-trades").value = currentUser.today_trades_count || 0;
     document.getElementById("upd-holding").value = currentUser.active_holding || "100% Cash";
-    const botRunningEl = document.getElementById("upd-bot-running");
-    if (botRunningEl) botRunningEl.checked = currentUser.is_bot_running === 1;
     
     openModal("update-balance-modal");
 }
@@ -582,16 +609,12 @@ async function handleUpdateStats(e) {
     const errorEl = document.getElementById("update-error");
     errorEl.style.display = "none";
 
-    const botRunningEl = document.getElementById("upd-bot-running");
-    const isRunningVal = botRunningEl ? (botRunningEl.checked ? 1 : 0) : 0;
-
     const payload = {
         portfolio_value: parseFloat(document.getElementById("upd-portfolio").value) || 0.0,
         available_cash: parseFloat(document.getElementById("upd-cash").value) || 0.0,
         today_profit_gbp: parseFloat(document.getElementById("upd-today-profit").value) || 0.0,
         today_trades_count: parseInt(document.getElementById("upd-trades").value) || 0,
-        active_holding: document.getElementById("upd-holding").value.trim() || "100% Cash",
-        is_bot_running: isRunningVal
+        active_holding: document.getElementById("upd-holding").value.trim() || "100% Cash"
     };
 
     try {
@@ -622,7 +645,7 @@ async function handleUpdateStats(e) {
         localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
 
         const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-        const idx = localTraders.findIndex(u => u.username === currentUser.username);
+        const idx = localTraders.findIndex(u => u.email === currentUser.email || u.username === currentUser.username);
         if (idx >= 0) {
             localTraders[idx] = currentUser;
         } else {
@@ -634,91 +657,6 @@ async function handleUpdateStats(e) {
     closeModal("update-balance-modal");
     renderNavLoggedIn(currentUser);
     fetchLeaderboardData(true);
-}
-
-// --- API Key & Webhook Guide Modal ---
-function openApiDocsModal() {
-    const keySection = document.getElementById("api-key-section");
-    const snippetCode = document.getElementById("python-snippet");
-    const origin = window.location.origin;
-
-    if (currentUser && currentUser.api_key) {
-        keySection.innerHTML = `
-            <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; display: block;">Your Secret Bot API Key</label>
-            <div class="api-key-box">
-                <span class="api-key-text" id="live-api-key">${currentUser.api_key}</span>
-                <button class="btn btn-secondary" onclick="copyApiKey()" style="padding: 6px 12px; font-size: 12px;">Copy Key</button>
-            </div>
-        `;
-        snippetCode.textContent = `import requests
-
-ARENA_URL = "${origin}/api/submit-stats"
-API_KEY = "${currentUser.api_key}"
-
-def report_stats(portfolio_val, cash, today_profit, trades_count, holding, is_running):
-    try:
-        requests.post(
-            f"{ARENA_URL}",
-            headers={"X-API-Key": API_KEY},
-            json={
-                "portfolio_value": portfolio_val,
-                "available_cash": cash,
-                "today_profit_gbp": today_profit,
-                "today_trades_count": trades_count,
-                "active_holding": holding,
-                "is_bot_running": is_running
-            },
-            timeout=5
-        )
-    except Exception as e:
-        print("Arena sync error:", e)`;
-    } else {
-        keySection.innerHTML = `
-            <div style="background: rgba(255, 193, 7, 0.08); border: 1px solid rgba(255, 193, 7, 0.25); padding: 14px; border-radius: 8px; margin-bottom: 18px; text-align: center;">
-                <p style="color: var(--mustard-gold); font-size: 13px; font-weight: 600;">
-                    Please <a href="#" onclick="switchModal('api-modal', 'login-modal')" style="color: #fff; text-decoration: underline;">log in</a> or <a href="#" onclick="switchModal('api-modal', 'register-modal')" style="color: #fff; text-decoration: underline;">register</a> to view your personal bot API key.
-                </p>
-            </div>
-        `;
-        snippetCode.textContent = `import requests
-
-ARENA_URL = "${origin}/api/submit-stats"
-API_KEY = "LOG_IN_TO_VIEW_YOUR_KEY"
-
-def report_stats(portfolio_val, cash, today_profit, trades_count, holding, is_running):
-    try:
-        requests.post(
-            f"{ARENA_URL}",
-            headers={"X-API-Key": API_KEY},
-            json={
-                "portfolio_value": portfolio_val,
-                "available_cash": cash,
-                "today_profit_gbp": today_profit,
-                "today_trades_count": trades_count,
-                "active_holding": holding,
-                "is_bot_running": is_running
-            },
-            timeout=5
-        )
-    except Exception as e:
-        print("Arena sync error:", e)`;
-    }
-
-    openModal("api-modal");
-}
-
-function copyApiKey() {
-    const key = document.getElementById("live-api-key").textContent;
-    navigator.clipboard.writeText(key).then(() => {
-        alert("API Key copied to clipboard!");
-    });
-}
-
-function copySnippet() {
-    const text = document.getElementById("python-snippet").textContent;
-    navigator.clipboard.writeText(text).then(() => {
-        alert("Python snippet copied to clipboard!");
-    });
 }
 
 // --- Modal Utilities ---

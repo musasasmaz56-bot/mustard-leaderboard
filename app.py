@@ -20,6 +20,7 @@ from database import (
     get_leaderboard_all_time,
     get_leaderboard_today,
     get_user_stats,
+    update_user_display_name,
 )
 from auth import hash_password, verify_password
 
@@ -88,6 +89,9 @@ class LoginRequest(BaseModel):
     username: str
     password: str
     remember_me: Optional[bool] = True
+
+class ChangeDisplayNameRequest(BaseModel):
+    new_display_name: str = Field(..., min_length=1, max_length=50)
 
 class UpdateStatsRequest(BaseModel):
     portfolio_value: float
@@ -300,6 +304,15 @@ def api_stats_summary():
     }
 
 # --- Stats Update Endpoints ---
+
+@app.post("/api/user/change-display-name")
+def api_change_display_name(req: ChangeDisplayNameRequest, user: dict = Depends(get_current_user_required)):
+    update_user_display_name(user["id"], req.new_display_name)
+    return {
+        "status": "success",
+        "message": f"Display name updated to {req.new_display_name}!",
+        "user": get_user_stats(user["id"])
+    }
 
 @app.post("/api/user/update-stats")
 def user_update_stats(req: UpdateStatsRequest, user: dict = Depends(get_current_user_required)):
