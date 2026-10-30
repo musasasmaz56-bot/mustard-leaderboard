@@ -1,5 +1,7 @@
 # 🏆 Mustard Trading Arena — Live Leaderboard
 
+[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&repository=github.com/musasasmaz56-bot/mustard-leaderboard&branch=main&name=mustard-leaderboard)
+
 A sleek, real-time multi-trader leaderboard and profit tracker built for **Mustard Investments** arbitrageurs.
 
 Runs **24/7 continuously** in the cloud with zero sleep on **Koyeb** or **Railway**.
