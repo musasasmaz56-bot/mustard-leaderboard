@@ -131,24 +131,91 @@ async function fetchLeaderboardData(isManual = false) {
     }
 }
 
+// --- Global Cloud Store for Cross-Device Leaderboard Sync ---
+const CLOUD_SYNC_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a18e35c91a68f8";
+
+async function fetchCloudTraders() {
+    try {
+        const res = await fetch(CLOUD_SYNC_URL + "?t=" + Date.now(), { cache: "no-store" });
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.data && Array.isArray(data.data.traders)) {
+                return data.data.traders;
+            }
+        }
+    } catch (e) {
+        console.warn("Cloud sync fetch error:", e);
+    }
+    return [];
+}
+
+async function pushCloudTrader(traderProfile) {
+    if (!traderProfile) return;
+    try {
+        const existingCloud = await fetchCloudTraders();
+        const cleanProfile = {
+            user_id: traderProfile.id || traderProfile.user_id || ("trader_" + Date.now()),
+            username: traderProfile.username,
+            email: traderProfile.email,
+            display_name: traderProfile.display_name,
+            avatar_color: traderProfile.avatar_color,
+            portfolio_value: parseFloat(traderProfile.portfolio_value) || 0.0,
+            available_cash: parseFloat(traderProfile.available_cash) || 0.0,
+            today_profit_gbp: parseFloat(traderProfile.today_profit_gbp) || 0.0,
+            today_profit_pct: parseFloat(traderProfile.today_profit_pct) || 0.0,
+            today_trades_count: parseInt(traderProfile.today_trades_count) || 0,
+            active_holding: traderProfile.active_holding || "100% Cash",
+            last_updated: traderProfile.last_updated || new Date().toISOString()
+        };
+
+        const idx = existingCloud.findIndex(u => (u.email && u.email === cleanProfile.email) || (u.user_id && u.user_id === cleanProfile.user_id));
+        if (idx >= 0) {
+            existingCloud[idx] = cleanProfile;
+        } else {
+            existingCloud.push(cleanProfile);
+        }
+
+        await fetch(CLOUD_SYNC_URL, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                name: "Mustard Leaderboard",
+                data: { traders: existingCloud }
+            })
+        });
+    } catch (e) {
+        console.warn("Cloud sync update error:", e);
+    }
+}
+
 async function fetchStaticLeaderboard() {
     try {
         let list = [];
-        try {
-            const res = await fetch("data/leaderboard.json");
-            if (res.ok) {
-                const data = await res.json();
-                if (data && data.leaderboard && data.leaderboard.length > 0) {
-                    list = data.leaderboard;
+
+        // 1. Fetch from Global Cloud Store (Shared in real-time across ALL phones & computers!)
+        const cloudTraders = await fetchCloudTraders();
+        if (cloudTraders && cloudTraders.length > 0) {
+            list = [...cloudTraders];
+        }
+
+        // 2. Fallback to repo static seed if cloud returned empty
+        if (list.length === 0) {
+            try {
+                const res = await fetch("data/leaderboard.json?t=" + Date.now());
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.leaderboard && data.leaderboard.length > 0) {
+                        list = data.leaderboard;
+                    }
                 }
-            }
-        } catch (e) {}
+            } catch (e) {}
+        }
         
-        // Only show users who have actually registered / logged in
+        // 3. Merge with local device traders
         const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
         if (localTraders.length > 0) {
             localTraders.forEach(trader => {
-                const existingIdx = list.findIndex(x => x.username === trader.username);
+                const existingIdx = list.findIndex(x => (x.email && x.email === trader.email) || (x.username && x.username === trader.username) || (x.user_id && x.user_id === trader.id));
                 if (existingIdx >= 0) {
                     list[existingIdx] = { ...list[existingIdx], ...trader };
                 } else {
@@ -157,15 +224,16 @@ async function fetchStaticLeaderboard() {
             });
         }
 
-        // Also merge current user if logged in
+        // 4. Merge current logged-in user
         if (currentUser) {
-            const myIdx = list.findIndex(x => x.username === currentUser.username);
+            const myIdx = list.findIndex(x => (x.email && x.email === currentUser.email) || (x.user_id && (x.user_id === currentUser.id || x.user_id === currentUser.user_id)));
             if (myIdx >= 0) {
                 list[myIdx] = { ...list[myIdx], ...currentUser };
             } else {
                 list.push({
-                    user_id: currentUser.id || Date.now(),
+                    user_id: currentUser.id || currentUser.user_id || Date.now(),
                     username: currentUser.username,
+                    email: currentUser.email,
                     display_name: currentUser.display_name,
                     avatar_color: currentUser.avatar_color || "#FFC107",
                     portfolio_value: currentUser.portfolio_value || 10000.0,
@@ -563,6 +631,8 @@ async function syncMustardAccount() {
             else localTraders.push(currentUser);
             localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
 
+            pushCloudTrader(currentUser);
+
             renderNavLoggedIn(currentUser);
             fetchLeaderboardData(true);
         }
@@ -690,6 +760,9 @@ async function handleLogin(e) {
             document.cookie = `session_user=${encodeURIComponent(email)}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
         }
 
+        // Broadcast to global cloud store so all other devices (phones & computers) see this trader immediately!
+        pushCloudTrader(currentUser);
+
         closeModal("login-modal");
         renderNavLoggedIn(currentUser);
         fetchLeaderboardData(true);
@@ -811,6 +884,9 @@ async function handleSaveDisplayName(e) {
             localTraders[idx].display_name = newName;
             localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
         }
+
+        // Broadcast to global cloud store so all other devices see the new nickname
+        pushCloudTrader(currentUser);
     }
 
     closeModal("edit-name-modal");
