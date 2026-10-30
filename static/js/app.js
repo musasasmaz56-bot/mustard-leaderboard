@@ -131,82 +131,9 @@ async function fetchLeaderboardData(isManual = false) {
     }
 }
 
-const DEFAULT_LEADERBOARD_SEEDS = [
-    {
-        user_id: 1,
-        username: "musa",
-        display_name: "Musa (Admin)",
-        avatar_color: "#FFC107",
-        portfolio_value: 13392.33,
-        available_cash: 0.21,
-        today_profit_gbp: 1392.33,
-        today_profit_pct: 11.60,
-        today_trades_count: 29,
-        active_holding: "OCDO.L",
-        is_bot_running: 1,
-        last_updated: new Date().toISOString()
-    },
-    {
-        user_id: 2,
-        username: "alex_t",
-        display_name: "Alex Turner",
-        avatar_color: "#00E676",
-        portfolio_value: 12450.80,
-        available_cash: 520.10,
-        today_profit_gbp: 950.80,
-        today_profit_pct: 8.27,
-        today_trades_count: 21,
-        active_holding: "LINK",
-        is_bot_running: 1,
-        last_updated: new Date().toISOString()
-    },
-    {
-        user_id: 3,
-        username: "sarah_k",
-        display_name: "Sarah Khan",
-        avatar_color: "#00D2FF",
-        portfolio_value: 11820.00,
-        available_cash: 11820.00,
-        today_profit_gbp: 620.00,
-        today_profit_pct: 5.54,
-        today_trades_count: 18,
-        active_holding: "100% Cash",
-        is_bot_running: 0,
-        last_updated: new Date().toISOString()
-    },
-    {
-        user_id: 4,
-        username: "david_b",
-        display_name: "David Beckett",
-        avatar_color: "#FF5252",
-        portfolio_value: 10980.50,
-        available_cash: 45.20,
-        today_profit_gbp: 280.50,
-        today_profit_pct: 2.62,
-        today_trades_count: 14,
-        active_holding: "BA.L",
-        is_bot_running: 1,
-        last_updated: new Date().toISOString()
-    },
-    {
-        user_id: 5,
-        username: "oliver_w",
-        display_name: "Oliver Wright",
-        avatar_color: "#E040FB",
-        portfolio_value: 10150.00,
-        available_cash: 10150.00,
-        today_profit_gbp: 150.00,
-        today_profit_pct: 1.50,
-        today_trades_count: 7,
-        active_holding: "100% Cash",
-        is_bot_running: 0,
-        last_updated: new Date().toISOString()
-    }
-];
-
 async function fetchStaticLeaderboard() {
     try {
-        let list = [...DEFAULT_LEADERBOARD_SEEDS];
+        let list = [];
         try {
             const res = await fetch("data/leaderboard.json");
             if (res.ok) {
@@ -217,7 +144,7 @@ async function fetchStaticLeaderboard() {
             }
         } catch (e) {}
         
-        // Merge with locally stored users or updates
+        // Only show users who have actually registered / logged in
         const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
         if (localTraders.length > 0) {
             localTraders.forEach(trader => {
@@ -230,14 +157,14 @@ async function fetchStaticLeaderboard() {
             });
         }
 
-        // Also merge current user if logged in locally
+        // Also merge current user if logged in
         if (currentUser) {
             const myIdx = list.findIndex(x => x.username === currentUser.username);
             if (myIdx >= 0) {
                 list[myIdx] = { ...list[myIdx], ...currentUser };
             } else {
                 list.push({
-                    user_id: currentUser.id || 99,
+                    user_id: currentUser.id || Date.now(),
                     username: currentUser.username,
                     display_name: currentUser.display_name,
                     avatar_color: currentUser.avatar_color || "#FFC107",
@@ -247,7 +174,6 @@ async function fetchStaticLeaderboard() {
                     today_profit_pct: currentUser.today_profit_pct || 0.0,
                     today_trades_count: currentUser.today_trades_count || 0,
                     active_holding: currentUser.active_holding || "100% Cash",
-                    is_bot_running: currentUser.is_bot_running || 0,
                     last_updated: currentUser.last_updated || new Date().toISOString()
                 });
             }
@@ -267,7 +193,6 @@ async function fetchStaticLeaderboard() {
         const totalWealth = list.reduce((acc, curr) => acc + (curr.portfolio_value || 0), 0);
         const totalProfit = list.reduce((acc, curr) => acc + (curr.today_profit_gbp || 0), 0);
         const totalTrades = list.reduce((acc, curr) => acc + (curr.today_trades_count || 0), 0);
-        const activeBots = list.filter(x => x.is_bot_running).length;
         
         const sortedWealth = [...list].sort((a, b) => (b.portfolio_value || 0) - (a.portfolio_value || 0));
         const sortedToday = [...list].sort((a, b) => (b.today_profit_gbp || 0) - (a.today_profit_gbp || 0));
@@ -277,7 +202,6 @@ async function fetchStaticLeaderboard() {
             total_today_profit: totalProfit,
             total_trades: totalTrades,
             active_traders: list.length,
-            active_bots: activeBots,
             top_wealth: sortedWealth[0],
             top_today: sortedToday[0]
         });
@@ -294,6 +218,9 @@ function renderKPIs(summary) {
     if (summary.top_wealth) {
         document.getElementById("kpi-leader-val").textContent = formatGBP(summary.top_wealth.portfolio_value);
         document.getElementById("kpi-leader-name").textContent = `${summary.top_wealth.display_name}`;
+    } else {
+        document.getElementById("kpi-leader-val").textContent = "£0.00";
+        document.getElementById("kpi-leader-name").textContent = "No leader yet";
     }
 
     // 2. Today's top earner
@@ -301,16 +228,19 @@ function renderKPIs(summary) {
         const prof = summary.top_today.today_profit_gbp;
         const sign = prof >= 0 ? "+" : "-";
         document.getElementById("kpi-today-val").textContent = `${sign}£${Math.abs(prof).toLocaleString('en-GB', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById("kpi-today-name").textContent = `${summary.top_today.display_name} (${summary.top_today.today_profit_pct.toFixed(2)}%)`;
+        document.getElementById("kpi-today-name").textContent = `${summary.top_today.display_name} (${(summary.top_today.today_profit_pct || 0).toFixed(2)}%)`;
+    } else {
+        document.getElementById("kpi-today-val").textContent = "£0.00";
+        document.getElementById("kpi-today-name").textContent = "No profits yet";
     }
 
     // 3. Group wealth
     document.getElementById("kpi-group-wealth").textContent = formatGBP(summary.total_wealth || 0);
-    document.getElementById("kpi-trader-count").textContent = `${summary.active_traders || 0} traders in arena`;
+    document.getElementById("kpi-trader-count").textContent = `${summary.active_traders || 0} registered traders`;
 
-    // 4. Active bots
-    document.getElementById("kpi-active-bots").textContent = `${summary.active_bots || 0} Live`;
-    document.getElementById("kpi-total-trades").textContent = `${summary.total_trades || 0} trades executed today`;
+    // 4. Total trades
+    const tradesValEl = document.getElementById("kpi-total-trades-val");
+    if (tradesValEl) tradesValEl.textContent = `${summary.total_trades || 0}`;
 }
 
 // --- Render Table ---
@@ -325,7 +255,11 @@ function renderTable(data) {
     }
 
     if (!data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">No traders registered yet. Be the first to join!</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="loading-cell" style="text-align: center; padding: 48px 20px;">
+            <div style="font-size: 32px; margin-bottom: 8px;">👑</div>
+            <div style="font-weight: 700; color: #fff; margin-bottom: 4px;">No traders registered yet!</div>
+            <div style="color: var(--text-secondary); font-size: 13px;">Click <strong>"Join Arena"</strong> above to register your account and appear on the leaderboard.</div>
+        </td></tr>`;
         return;
     }
 
@@ -353,18 +287,13 @@ function renderTable(data) {
             ? `<span class="mono-val ${profitClass}">${profitStr}</span> <span class="sub-pct ${profitClass}">(${profitPct.toFixed(2)}%)</span>`
             : `<span class="mono-val text-gold">${formatGBP(item.portfolio_value)}</span>`;
 
-        const isRunning = item.is_bot_running === 1 || item.is_bot_running === true;
-        const botStatusHtml = isRunning
-            ? `<span class="bot-status-tag bot-active"><span class="status-dot green"></span>RUNNING</span>`
-            : `<span class="bot-status-tag bot-idle"><span class="status-dot gray"></span>IDLE</span>`;
-
         const avatarColor = item.avatar_color || "#00E676";
         const initials = item.display_name ? item.display_name.charAt(0).toUpperCase() : "T";
         const syncTimeStr = formatTimeAgo(item.last_updated);
 
         return `
             <tr class="${isCurrent ? 'user-row' : ''}" id="trader-row-${item.user_id}">
-                <td>${rankHtml}</td>
+                <td class="text-center">${rankHtml}</td>
                 <td>
                     <div class="trader-cell">
                         <div class="trader-avatar" style="background-color: ${avatarColor};">
@@ -387,7 +316,6 @@ function renderTable(data) {
                 <td>
                     <span class="tag-holding">${escapeHtml(item.active_holding || '100% Cash')}</span>
                 </td>
-                <td class="text-center">${botStatusHtml}</td>
                 <td class="text-right">
                     <span class="sync-time">${syncTimeStr}</span>
                 </td>
@@ -643,7 +571,8 @@ function openUpdateModal() {
     document.getElementById("upd-today-profit").value = currentUser.today_profit_gbp || "";
     document.getElementById("upd-trades").value = currentUser.today_trades_count || 0;
     document.getElementById("upd-holding").value = currentUser.active_holding || "100% Cash";
-    document.getElementById("upd-bot-running").checked = currentUser.is_bot_running === 1;
+    const botRunningEl = document.getElementById("upd-bot-running");
+    if (botRunningEl) botRunningEl.checked = currentUser.is_bot_running === 1;
     
     openModal("update-balance-modal");
 }
@@ -653,13 +582,16 @@ async function handleUpdateStats(e) {
     const errorEl = document.getElementById("update-error");
     errorEl.style.display = "none";
 
+    const botRunningEl = document.getElementById("upd-bot-running");
+    const isRunningVal = botRunningEl ? (botRunningEl.checked ? 1 : 0) : 0;
+
     const payload = {
         portfolio_value: parseFloat(document.getElementById("upd-portfolio").value) || 0.0,
         available_cash: parseFloat(document.getElementById("upd-cash").value) || 0.0,
         today_profit_gbp: parseFloat(document.getElementById("upd-today-profit").value) || 0.0,
         today_trades_count: parseInt(document.getElementById("upd-trades").value) || 0,
         active_holding: document.getElementById("upd-holding").value.trim() || "100% Cash",
-        is_bot_running: document.getElementById("upd-bot-running").checked ? 1 : 0
+        is_bot_running: isRunningVal
     };
 
     try {
@@ -814,11 +746,16 @@ function formatGBP(val) {
 function formatTimeAgo(dateString) {
     if (!dateString) return "just now";
     try {
-        const date = new Date(dateString.replace(" ", "T") + "Z");
+        let date = new Date(dateString);
+        if (isNaN(date.getTime())) {
+            date = new Date(dateString.replace(" ", "T"));
+        }
+        if (isNaN(date.getTime())) return "just now";
+        
         const now = new Date();
         const diffSec = Math.floor((now - date) / 1000);
         
-        if (diffSec < 15) return "just now";
+        if (diffSec < 15 || isNaN(diffSec) || diffSec < 0) return "just now";
         if (diffSec < 60) return `${diffSec}s ago`;
         const diffMin = Math.floor(diffSec / 60);
         if (diffMin < 60) return `${diffMin}m ago`;
@@ -826,7 +763,7 @@ function formatTimeAgo(dateString) {
         if (diffHour < 24) return `${diffHour}h ago`;
         return `${Math.floor(diffHour / 24)}d ago`;
     } catch {
-        return "recently";
+        return "just now";
     }
 }
 

@@ -68,31 +68,8 @@ def init_db():
     conn.close()
 
 def seed_sample_data(conn):
-    from auth import hash_password
-    today_str = datetime.date.today().isoformat()
-    
-    samples = [
-        ("musa", "Musa (Admin)", "mustard123", "#FFC107", 13392.33, 0.21, 12000.0, 1392.33, 11.60, 29, "OCDO.L", 1),
-        ("alex_t", "Alex Turner", "trader123", "#00E676", 12450.80, 520.10, 11500.0, 950.80, 8.27, 21, "LINK", 1),
-        ("sarah_k", "Sarah Khan", "trader123", "#00D2FF", 11820.00, 11820.00, 11200.0, 620.00, 5.54, 18, "100% Cash", 0),
-        ("david_b", "David Beckett", "trader123", "#FF5252", 10980.50, 45.20, 10700.0, 280.50, 2.62, 14, "BA.L", 1),
-        ("oliver_w", "Oliver Wright", "trader123", "#E040FB", 10150.00, 10150.00, 10000.0, 150.00, 1.50, 7, "100% Cash", 0),
-    ]
-    
-    cursor = conn.cursor()
-    for u, name, pwd, color, port, cash, start_b, prof, prof_pct, trades, holding, running in samples:
-        h, s = hash_password(pwd)
-        k = f"mb_live_{secrets.token_hex(12)}"
-        cursor.execute("""
-            INSERT INTO users (username, display_name, password_hash, salt, api_key, avatar_color)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (u, name, h, s, k, color))
-        u_id = cursor.lastrowid
-        cursor.execute("""
-            INSERT INTO stats (user_id, portfolio_value, available_cash, today_starting_balance, today_profit_gbp, today_profit_pct, today_trades_count, active_holding, is_bot_running, stat_date, last_updated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (u_id, port, cash, start_b, prof, prof_pct, trades, holding, running, today_str, datetime.datetime.utcnow().isoformat()))
-    conn.commit()
+    # No sample/mock users - only real users who register will appear on the leaderboard
+    pass
 
 # --- User & Session Operations ---
 

@@ -534,37 +534,44 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
+    min-width: 48px;
     height: 32px;
+    padding: 0 8px;
     border-radius: 8px;
     font-family: var(--font-mono);
     font-weight: 800;
     font-size: 13px;
+    line-height: 1;
+    gap: 5px;
+    white-space: nowrap;
+    margin: 0 auto;
 }
 
 .rank-1 {
-    background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 193, 7, 0.05));
-    border: 1px solid rgba(255, 193, 7, 0.6);
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.22), rgba(255, 193, 7, 0.08));
+    border: 1px solid rgba(255, 193, 7, 0.65);
     color: var(--mustard-gold);
-    box-shadow: 0 0 14px rgba(255, 193, 7, 0.2);
+    box-shadow: 0 0 14px rgba(255, 193, 7, 0.25);
 }
 
 .rank-2 {
-    background: linear-gradient(135deg, rgba(220, 220, 230, 0.2), rgba(220, 220, 230, 0.05));
-    border: 1px solid rgba(220, 220, 230, 0.6);
+    background: linear-gradient(135deg, rgba(220, 220, 230, 0.22), rgba(220, 220, 230, 0.08));
+    border: 1px solid rgba(220, 220, 230, 0.65);
     color: #E2E8F0;
-    box-shadow: 0 0 10px rgba(220, 220, 230, 0.15);
+    box-shadow: 0 0 10px rgba(220, 220, 230, 0.2);
 }
 
 .rank-3 {
-    background: linear-gradient(135deg, rgba(205, 127, 50, 0.2), rgba(205, 127, 50, 0.05));
-    border: 1px solid rgba(205, 127, 50, 0.6);
+    background: linear-gradient(135deg, rgba(205, 127, 50, 0.22), rgba(205, 127, 50, 0.08));
+    border: 1px solid rgba(205, 127, 50, 0.65);
     color: #FFB074;
 }
 
 .rank-other {
     color: var(--text-muted);
     font-weight: 700;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
 }
 
 /* Trader Cell */

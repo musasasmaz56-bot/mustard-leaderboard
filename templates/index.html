@@ -84,9 +84,9 @@
             <div class="kpi-card purple-border">
                 <div class="kpi-icon">⚡</div>
                 <div class="kpi-content">
-                    <span class="kpi-label">ACTIVE AUTO-BOTS</span>
-                    <div class="kpi-value text-purple" id="kpi-active-bots">--</div>
-                    <span class="kpi-sub" id="kpi-total-trades">-- trades today</span>
+                    <span class="kpi-label">TOTAL TRADES TODAY</span>
+                    <div class="kpi-value text-purple" id="kpi-total-trades-val">0</div>
+                    <span class="kpi-sub" id="kpi-total-trades-sub">Completed trades</span>
                 </div>
             </div>
         </section>
@@ -122,20 +122,19 @@
                 <table class="arena-table">
                     <thead>
                         <tr>
-                            <th style="width: 80px;">RANK</th>
+                            <th class="text-center" style="width: 80px;">RANK</th>
                             <th>TRADER</th>
                             <th class="text-right" id="th-primary-metric">TOTAL WEALTH</th>
                             <th class="text-right">TODAY'S PROFIT</th>
                             <th class="text-center">DAILY QUOTA</th>
                             <th>CURRENT HOLDING</th>
-                            <th class="text-center">STATUS</th>
                             <th class="text-right">LAST SYNC</th>
                         </tr>
                     </thead>
                     <tbody id="leaderboard-body">
                         <!-- Populated by JS -->
                         <tr>
-                            <td colspan="8" class="loading-cell">Loading live arena data...</td>
+                            <td colspan="7" class="loading-cell">Loading live arena data...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -258,13 +257,6 @@
                 <div class="form-group">
                     <label>Current Active Position / Holding</label>
                     <input type="text" id="upd-holding" placeholder="e.g. OCDO.L, LINK, or 100% Cash">
-                </div>
-                <div class="form-group checkbox-group">
-                    <label class="custom-checkbox">
-                        <input type="checkbox" id="upd-bot-running">
-                        <span class="checkmark"></span>
-                        <span class="checkbox-text">My Mustard Bot is currently RUNNING</span>
-                    </label>
                 </div>
                 <div id="update-error" class="form-error"></div>
                 <button type="submit" class="btn btn-primary btn-block">Save Live Stats</button>
