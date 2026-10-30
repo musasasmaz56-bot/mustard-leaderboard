@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mustard Trading Arena — Live Leaderboard</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Top Navigation -->
+    <header class="top-nav">
+        <div class="nav-left">
+            <div class="brand">
+                <span class="brand-badge">PRO</span>
+                <span class="brand-title">MUSTARD INVESTMENTS</span>
+                <span class="brand-sub">LEADERBOARD ARENA</span>
+            </div>
+            <div class="market-pill">
+                <span class="pulse-dot"></span>
+                <span class="market-status-text">LIVE SYNC ACTIVE</span>
+                <span class="market-clock" id="live-clock">--:--:--</span>
+            </div>
+        </div>
+
+        <div class="nav-right" id="nav-auth-container">
+            <!-- Populated dynamically by JS based on auth state -->
+            <button class="btn btn-secondary" onclick="openModal('login-modal')">Log In</button>
+            <button class="btn btn-primary" onclick="openModal('register-modal')">Join Arena</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Hero Header -->
+        <section class="hero-banner">
+            <div class="hero-text">
+                <h1>Wall Street of Friends</h1>
+                <p>Real-time trading performance leaderboard for Mustard Investments arbitrageurs.</p>
+            </div>
+            <div class="hero-actions">
+                <div class="sync-indicator">
+                    <span class="countdown-badge" id="refresh-timer">10s</span>
+                    <button class="btn btn-icon" id="manual-refresh-btn" title="Refresh Now" onclick="fetchLeaderboardData(true)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- KPI Summary Cards -->
+        <section class="kpi-grid">
+            <div class="kpi-card gold-border">
+                <div class="kpi-icon">👑</div>
+                <div class="kpi-content">
+                    <span class="kpi-label">ALL-TIME LEADER</span>
+                    <div class="kpi-value text-gold" id="kpi-leader-val">£--</div>
+                    <span class="kpi-sub" id="kpi-leader-name">--</span>
+                </div>
+            </div>
+
+            <div class="kpi-card green-border">
+                <div class="kpi-icon">🚀</div>
+                <div class="kpi-content">
+                    <span class="kpi-label">TODAY'S CHAMPION</span>
+                    <div class="kpi-value text-green" id="kpi-today-val">+£--</div>
+                    <span class="kpi-sub" id="kpi-today-name">--</span>
+                </div>
+            </div>
+
+            <div class="kpi-card cyan-border">
+                <div class="kpi-icon">💼</div>
+                <div class="kpi-content">
+                    <span class="kpi-label">TOTAL GROUP WEALTH</span>
+                    <div class="kpi-value text-cyan" id="kpi-group-wealth">£--</div>
+                    <span class="kpi-sub" id="kpi-trader-count">-- traders linked</span>
+                </div>
+            </div>
+
+            <div class="kpi-card purple-border">
+                <div class="kpi-icon">⚡</div>
+                <div class="kpi-content">
+                    <span class="kpi-label">ACTIVE AUTO-BOTS</span>
+                    <div class="kpi-value text-purple" id="kpi-active-bots">--</div>
+                    <span class="kpi-sub" id="kpi-total-trades">-- trades today</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Leaderboard Card -->
+        <section class="arena-card">
+            <!-- Tabs & Filter Bar -->
+            <div class="card-toolbar">
+                <div class="tab-group">
+                    <button class="tab-btn active" id="tab-all-time" onclick="switchTab('all-time')">
+                        <span class="tab-icon">🏆</span>
+                        <span class="tab-text">Most Money (Net Worth)</span>
+                    </button>
+                    <button class="tab-btn" id="tab-today" onclick="switchTab('today')">
+                        <span class="tab-icon">📈</span>
+                        <span class="tab-text">Most Money Today</span>
+                    </button>
+                </div>
+
+                <div class="filter-group">
+                    <div class="search-box">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="trader-search" placeholder="Search friends..." oninput="filterTable()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="table-responsive">
+                <table class="arena-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">RANK</th>
+                            <th>TRADER</th>
+                            <th class="text-right" id="th-primary-metric">TOTAL WEALTH</th>
+                            <th class="text-right">TODAY'S PROFIT</th>
+                            <th class="text-center">DAILY QUOTA</th>
+                            <th>CURRENT HOLDING</th>
+                            <th class="text-center">STATUS</th>
+                            <th class="text-right">LAST SYNC</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body">
+                        <!-- Populated by JS -->
+                        <tr>
+                            <td colspan="8" class="loading-cell">Loading live arena data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Bot Integration Banner -->
+        <section class="integration-banner">
+            <div class="banner-left">
+                <h3>🤖 Want your trading bot to update automatically?</h3>
+                <p>Every account gets a private API key. Connect your Mustard bot or custom script in 3 lines of code!</p>
+            </div>
+            <div class="banner-right">
+                <button class="btn btn-outline" onclick="openApiDocsModal()">View Bot Webhook Guide</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <p>Mustard Trading Arena &bull; High Frequency Latency Arbitrage Community &bull; Cloud Hosted on Render</p>
+    </footer>
+
+    <!-- MODALS -->
+
+    <!-- Login Modal -->
+    <div class="modal-backdrop" id="login-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>Log In to Arena</h2>
+                <button class="close-btn" onclick="closeModal('login-modal')">&times;</button>
+            </div>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="login-username" required placeholder="e.g. musa" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <div class="form-group checkbox-group" style="margin-top: -6px; margin-bottom: 14px;">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="login-remember" checked>
+                        <span class="checkmark"></span>
+                        <span class="checkbox-text" style="font-size: 12px; color: var(--text-secondary);">Remember me on this device (Save Session Cookie)</span>
+                    </label>
+                </div>
+                <div id="login-error" class="form-error"></div>
+                <button type="submit" class="btn btn-primary btn-block">Log In</button>
+            </form>
+            <div class="modal-footer-text">
+                Don't have an account? <a href="#" onclick="switchModal('login-modal', 'register-modal')">Sign up here</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal-backdrop" id="register-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>Join Trading Arena</h2>
+                <button class="close-btn" onclick="closeModal('register-modal')">&times;</button>
+            </div>
+            <form onsubmit="handleRegister(event)">
+                <div class="form-group">
+                    <label>Display Name (Nickname)</label>
+                    <input type="text" id="reg-name" required placeholder="e.g. Musa (Arbitrage King)">
+                </div>
+                <div class="form-group">
+                    <label>Username (Unique Handle)</label>
+                    <input type="text" id="reg-username" required placeholder="e.g. musa" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" required placeholder="At least 4 characters" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label>Mustard Account Email (Optional)</label>
+                    <input type="email" id="reg-email" placeholder="e.g. student@school.co.uk">
+                </div>
+                <div id="register-error" class="form-error"></div>
+                <button type="submit" class="btn btn-primary btn-block">Create Trader Account</button>
+            </form>
+            <div class="modal-footer-text">
+                Already registered? <a href="#" onclick="switchModal('register-modal', 'login-modal')">Log in here</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Balance Modal -->
+    <div class="modal-backdrop" id="update-balance-modal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>Update My Balance</h2>
+                <button class="close-btn" onclick="closeModal('update-balance-modal')">&times;</button>
+            </div>
+            <p class="modal-desc">Manually enter your current Mustard balance or profit. You can also connect your bot to sync this automatically!</p>
+            <form onsubmit="handleUpdateStats(event)">
+                <div class="form-row">
+                    <div class="form-group col-half">
+                        <label>Portfolio Value (£)</label>
+                        <input type="number" step="0.01" id="upd-portfolio" required placeholder="13392.33">
+                    </div>
+                    <div class="form-group col-half">
+                        <label>Available Cash (£)</label>
+                        <input type="number" step="0.01" id="upd-cash" placeholder="0.21">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-half">
+                        <label>Today's Profit (£)</label>
+                        <input type="number" step="0.01" id="upd-today-profit" placeholder="1392.33">
+                    </div>
+                    <div class="form-group col-half">
+                        <label>Today's Trades (out of 50)</label>
+                        <input type="number" id="upd-trades" min="0" max="50" placeholder="29">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Current Active Position / Holding</label>
+                    <input type="text" id="upd-holding" placeholder="e.g. OCDO.L, LINK, or 100% Cash">
+                </div>
+                <div class="form-group checkbox-group">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" id="upd-bot-running">
+                        <span class="checkmark"></span>
+                        <span class="checkbox-text">My Mustard Bot is currently RUNNING</span>
+                    </label>
+                </div>
+                <div id="update-error" class="form-error"></div>
+                <button type="submit" class="btn btn-primary btn-block">Save Live Stats</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- API Key & Webhook Guide Modal -->
+    <div class="modal-backdrop" id="api-modal">
+        <div class="modal-box modal-wide">
+            <div class="modal-header">
+                <h2>Bot Webhook & API Key</h2>
+                <button class="close-btn" onclick="closeModal('api-modal')">&times;</button>
+            </div>
+            
+            <div id="api-key-section">
+                <!-- If logged in, shows key; otherwise prompts to log in -->
+            </div>
+
+            <div class="api-instructions">
+                <h4>How to automatically push stats from Python:</h4>
+                <div class="code-snippet-box">
+                    <button class="copy-code-btn" onclick="copySnippet()">Copy Code</button>
+                    <pre><code id="python-snippet">import requests
+
+ARENA_URL = window.location.origin + "/api/submit-stats"
+API_KEY = "YOUR_API_KEY_HERE"
+
+def report_stats(portfolio_val, cash, today_profit, trades_count, holding, is_running):
+    try:
+        requests.post(
+            f"{ARENA_URL}",
+            headers={"X-API-Key": API_KEY},
+            json={
+                "portfolio_value": portfolio_val,
+                "available_cash": cash,
+                "today_profit_gbp": today_profit,
+                "today_trades_count": trades_count,
+                "active_holding": holding,
+                "is_bot_running": is_running
+            },
+            timeout=5
+        )
+    except Exception as e:
+        print("Arena webhook error:", e)</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Cookie Notice Banner -->
+    <div class="cookie-banner" id="cookie-consent-banner">
+        <div class="cookie-content">
+            <div class="cookie-icon">🍪</div>
+            <div class="cookie-text">
+                <span class="cookie-title">Cookie & Session Notice</span>
+                <p>We use essential cookies to keep your trading account logged in, remember your custom dashboard filters, and sync live leaderboard data in real-time.</p>
+            </div>
+        </div>
+        <div class="cookie-actions">
+            <button class="btn btn-secondary btn-sm" onclick="acceptCookies('essential')">Essential Only</button>
+            <button class="btn btn-primary btn-sm" onclick="acceptCookies('all')">Accept All Cookies</button>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
