@@ -15,7 +15,8 @@ jobs:
           # Replace with your live Render or Koyeb URL if different
           TARGET_URL="${{ secrets.ARENA_URL }}"
           if [ -z "$TARGET_URL" ]; then
-            TARGET_URL="https://mustard-arena.onrender.com"
+            echo "ARENA_URL secret not set. Skipping ping."
+            exit 0
           fi
           
           echo "Pinging 24/7 Arena: $TARGET_URL/ping"

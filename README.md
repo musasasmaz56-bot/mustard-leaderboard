@@ -2,7 +2,7 @@
 
 A sleek, real-time multi-trader leaderboard and profit tracker built for **Mustard Investments** arbitrageurs.
 
-Deployable in 2 minutes to **Render (Render.com)** on the Free tier.
+Runs **24/7 continuously** in the cloud with zero sleep on **Koyeb** or **Railway**.
 
 ---
 
@@ -14,50 +14,34 @@ Deployable in 2 minutes to **Render (Render.com)** on the Free tier.
 - 🔐 **Friend Authentication:** Fast sign-up and login with PBKDF2 HMAC SHA-256 secure password hashing.
 - ✍️ **Manual Balance Updates:** Friends can easily update their portfolio value, available cash, today's profit, trade count, and active holding directly from the web interface.
 - 🍪 **Cookies & Persistent Sessions:** Built-in "Remember Me" session cookies (30-day auto-login) plus an interactive Cookie Consent banner.
-- ⏰ **24/7 Keep-Alive Automation:** Includes a GitHub Actions automated workflow (`.github/workflows/keep_alive.yml`) that pings your app every 10 minutes so it never goes to sleep!
+- ⏰ **24/7 Non-Stop Uptime:** Native 24/7 continuous uptime on Koyeb (no sleep/spin-down penalties).
 - 🤖 **Automated Bot Webhook API:** Every user gets a private API key (`mb_live_...`). Any automated Mustard bot can push live stats automatically on every trade!
 - 🎨 **High-Tech Aesthetic:** High-frequency trading terminal look with dark glassmorphism, Mustard Gold (`#FFC107`), Neon Emerald Green (`#00E676`), and live market status.
 
 ---
 
-## 🚀 How to Deploy to Render in 2 Minutes (Free)
+## 🚀 Recommended 24/7 Hosting: Koyeb (100% Free, Zero Sleep)
 
-### Method 1: Push to GitHub & Deploy via Render Dashboard (Recommended)
+Unlike other free hosts that sleep after 15 minutes of inactivity, **Koyeb** provides a free tier that runs **24 hours a day, 7 days a week, continuously with NO sleep**:
 
-1. **Push this directory to your GitHub:**
-   ```bash
-   cd mustard-leaderboard
-   git init
-   git add .
-   git commit -m "Initial commit of Mustard Leaderboard"
-   git branch -M main
-   git remote add origin https://github.com/<YOUR_GITHUB_USERNAME>/mustard-leaderboard.git
-   git push -u origin main
-   ```
+1. Log into **[Koyeb.com](https://www.koyeb.com)** (Click "Sign up with GitHub").
+2. Click **Create Web Service**.
+3. Choose **GitHub** as the source and select **`musasasmaz56-bot/mustard-leaderboard`**.
+4. Koyeb will automatically detect the `Dockerfile` and configure port `8000`.
+5. Click **Deploy**.
 
-2. **Deploy on Render:**
-   - Log into [Render.com](https://render.com).
-   - Click **New +** > **Web Service**.
-   - Select your `mustard-leaderboard` repository.
-   - Render will auto-detect the configuration, or enter:
-     - **Name:** `mustard-arena` (or whatever you prefer)
-     - **Runtime:** `Python 3`
-     - **Build Command:** `pip install -r requirements.txt`
-     - **Start Command:** `uvicorn app:app --host 0.0.0.0 --port $PORT`
-     - **Instance Type:** `Free`
-   - Click **Create Web Service**.
-
-3. **Done!**
-   In about 60 seconds, Render will build and launch your live leaderboard URL (e.g., `https://mustard-arena.onrender.com`). Send the link to your friends!
+Within 60 seconds, your site is live 24/7 at a free public URL like:
+`https://mustard-leaderboard-musasasmaz56.koyeb.app`
 
 ---
 
-### Method 2: Render Blueprint (Infrastructure as Code)
+## 🚂 Alternative: Railway (railway.app)
 
-Because this repository already contains `render.yaml` and `Procfile`:
-1. In Render, click **New +** > **Blueprint**.
-2. Connect your GitHub repository.
-3. Render reads `render.yaml` and deploys automatically with zero manual configuration.
+1. Open **[railway.app](https://railway.app)** and log in with GitHub.
+2. Click **New Project** > **Deploy from GitHub repo**.
+3. Select **`musasasmaz56-bot/mustard-leaderboard`**.
+4. Click **Deploy Now**.
+5. Under Settings, click **Generate Domain** to get your public 24/7 URL!
 
 ---
 
