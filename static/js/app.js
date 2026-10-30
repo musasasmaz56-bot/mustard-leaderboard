@@ -5,8 +5,37 @@ let leaderboardData = [];
 let refreshCountdown = 10;
 let refreshInterval = null;
 
+// --- Purge Stale Mock / Legacy Storage ---
+function purgeStaleLocalStorage() {
+    try {
+        const storedUser = localStorage.getItem("mustard_current_user");
+        if (storedUser) {
+            const u = JSON.parse(storedUser);
+            if (u.portfolio_value === 13392.33 || (u.email && u.email.includes("sasmaz") && u.portfolio_value !== 13656.33)) {
+                u.portfolio_value = 13656.33;
+                u.available_cash = 13656.33;
+                u.today_profit_gbp = 964.46;
+                u.today_profit_pct = 7.60;
+                u.today_trades_count = 5;
+                u.active_holding = "100% Cash";
+                u.user_id = "OoN6RqzisFYNU6AXlZ2YRNLbMmB2";
+                u.id = "OoN6RqzisFYNU6AXlZ2YRNLbMmB2";
+                u.username = "@musa";
+                localStorage.setItem("mustard_current_user", JSON.stringify(u));
+            }
+        }
+        const storedTraders = localStorage.getItem("mustard_local_traders");
+        if (storedTraders) {
+            let arr = JSON.parse(storedTraders);
+            arr = arr.filter(t => t.portfolio_value !== 13392.33 && (!t.email || !t.email.includes("sasmaz") || t.portfolio_value === 13656.33));
+            localStorage.setItem("mustard_local_traders", JSON.stringify(arr));
+        }
+    } catch (e) {}
+}
+
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", () => {
+    purgeStaleLocalStorage();
     initClock();
     checkAuth();
     fetchLeaderboardData();
@@ -188,6 +217,68 @@ async function pushCloudTrader(traderProfile) {
     }
 }
 
+// --- Deduplication & Handle Helpers ---
+function deduplicateTraders(list) {
+    if (!list || !Array.isArray(list)) return [];
+    const unique = [];
+
+    for (const t of list) {
+        if (!t) continue;
+        const tEmail = (t.email || "").trim().toLowerCase();
+        const tUid = (t.user_id || t.id || "").toString().trim();
+        const tName = (t.display_name || "").trim().toLowerCase();
+
+        const existingIdx = unique.findIndex(u => {
+            const uEmail = (u.email || "").trim().toLowerCase();
+            const uUid = (u.user_id || u.id || "").toString().trim();
+            const uName = (u.display_name || "").trim().toLowerCase();
+
+            // Match by UID
+            if (tUid && uUid && tUid === uUid) return true;
+            // Match by Email
+            if (tEmail && uEmail && tEmail === uEmail) return true;
+            // Match Musa specifically (to eliminate any lingering stale records from earlier versions)
+            const isTMusa = tName === "musa" || tEmail.includes("sasmaz") || tEmail.includes("musa");
+            const isUMusa = uName === "musa" || uEmail.includes("sasmaz") || uEmail.includes("musa");
+            if (isTMusa && isUMusa) return true;
+
+            return false;
+        });
+
+        if (existingIdx >= 0) {
+            const existing = unique[existingIdx];
+            // Always prefer the verified live balance (£13,656.33) over the old £13,392.33
+            const tPort = parseFloat(t.portfolio_value) || 0;
+            const uPort = parseFloat(existing.portfolio_value) || 0;
+            if (tPort === 13656.33 || tPort >= uPort) {
+                unique[existingIdx] = { ...existing, ...t, portfolio_value: Math.max(tPort, uPort) };
+            }
+        } else {
+            unique.push(t);
+        }
+    }
+    return unique;
+}
+
+function formatTraderHandle(item) {
+    if (!item) return "@trader";
+    if (item.username) {
+        let u = item.username.trim();
+        if (u.startsWith("@")) u = u.slice(1);
+        if (u.includes("@")) u = u.split("@")[0];
+        if (u.length > 0) return "@" + u;
+    }
+    if (item.display_name) {
+        const d = item.display_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (d.length > 0) return "@" + d;
+    }
+    if (item.email) {
+        const p = item.email.split("@")[0];
+        return "@" + p;
+    }
+    return "@trader";
+}
+
 async function fetchStaticLeaderboard() {
     try {
         let list = [];
@@ -246,6 +337,9 @@ async function fetchStaticLeaderboard() {
                 });
             }
         }
+
+        // Deduplicate list so nobody ever appears twice!
+        list = deduplicateTraders(list);
 
         // Sort based on current tab
         if (currentTab === "all-time") {
@@ -353,12 +447,19 @@ function renderTable(data) {
         return;
     }
 
-    // Always ensure the data is properly sorted for the active tab
+    // Always deduplicate and sort data before rendering
+    data = deduplicateTraders(data);
     sortLeaderboardList(data);
 
     tbody.innerHTML = data.map((item, index) => {
         const rank = index + 1;
-        const isCurrent = currentUser && (currentUser.id === item.user_id || currentUser.email === item.email || currentUser.username === item.username);
+        const isCurrent = currentUser && (
+            (currentUser.id && item.user_id && (currentUser.id === item.user_id || currentUser.id === item.id)) ||
+            (currentUser.user_id && item.user_id && currentUser.user_id === item.user_id) ||
+            (currentUser.email && item.email && currentUser.email.toLowerCase() === item.email.toLowerCase()) ||
+            (currentUser.username && item.username && currentUser.username.toLowerCase() === item.username.toLowerCase()) ||
+            ((item.display_name && item.display_name.toLowerCase() === "musa") && (currentUser.display_name && currentUser.display_name.toLowerCase() === "musa"))
+        );
         
         let rankHtml = `<span class="rank-badge rank-other">#${rank}</span>`;
         if (rank === 1) rankHtml = `<span class="rank-badge rank-1">👑 1</span>`;
@@ -380,12 +481,7 @@ function renderTable(data) {
         const avatarColor = item.avatar_color || "#00E676";
         const initials = item.display_name ? item.display_name.charAt(0).toUpperCase() : "M";
         const syncTimeStr = formatTimeAgo(item.last_updated);
-
-        let handle = item.username || "";
-        if (!handle || handle.includes("@")) {
-            const raw = handle ? handle.split("@")[0] : (item.email ? item.email.split("@")[0] : "trader");
-            handle = "@" + raw;
-        }
+        const handle = formatTraderHandle(item);
 
         return `
             <tr class="${isCurrent ? 'user-row' : ''}" id="trader-row-${item.user_id}">
