@@ -545,20 +545,27 @@ body {
 .text-right { text-align: right; }
 .text-center { text-align: center; }
 
-/* Rank Badges */
+/* Rank Badges & Column Centering */
+.col-rank {
+    text-align: center !important;
+    vertical-align: middle !important;
+    width: 80px;
+}
+
 .rank-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    text-align: center;
     min-width: 48px;
     height: 32px;
-    padding: 0 8px;
+    padding: 0 10px;
     border-radius: 8px;
     font-family: var(--font-mono);
     font-weight: 800;
     font-size: 13px;
     line-height: 1;
-    gap: 5px;
+    gap: 6px;
     white-space: nowrap;
     margin: 0 auto;
 }

@@ -29,6 +29,22 @@ function purgeStaleLocalStorage() {
                 localStorage.setItem("mustard_current_user", JSON.stringify(u));
             }
         }
+
+        // Clean any fake demo accounts from previous mock versions
+        const cached = localStorage.getItem("mustard_synced_cloud_traders");
+        if (cached) {
+            let list = JSON.parse(cached);
+            if (Array.isArray(list)) {
+                list = list.filter(t => {
+                    if (!t) return false;
+                    const name = (t.display_name || "").toLowerCase();
+                    const email = (t.email || "").toLowerCase();
+                    if (name.includes("alex turner") || name.includes("sarah khan") || name.includes("david beckett") || name.includes("oliver wright")) return false;
+                    return true;
+                });
+                localStorage.setItem("mustard_synced_cloud_traders", JSON.stringify(list));
+            }
+        }
     } catch (e) {}
 }
 
@@ -37,6 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
     purgeStaleLocalStorage();
     initClock();
     checkAuth();
+    initRealtimeCloudSync();
     fetchLeaderboardData();
     startCountdownTimer();
     initCookieNotice();
@@ -159,61 +176,140 @@ async function fetchLeaderboardData(isManual = false) {
     }
 }
 
-// --- Global Cloud Store for Cross-Device Leaderboard Sync ---
-const CLOUD_SYNC_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a18e35c91a68f8";
+// --- Realtime Multi-Device Cloud Synchronization Engine (MQTT WebSockets) ---
+const MQTT_BROKER_URLS = [
+    "wss://broker.emqx.io:8084/mqtt",
+    "wss://broker.hivemq.com:8884/mqtt"
+];
+const MQTT_BASE_TOPIC = "mustard_trading_leaderboard/v1/traders";
 
-async function fetchCloudTraders() {
+let mqttClient = null;
+let realtimeTradersMap = new Map();
+
+function initRealtimeCloudSync() {
+    // 1. Preload any previously cached cloud traders from localStorage
     try {
-        const res = await fetch(CLOUD_SYNC_URL + "?t=" + Date.now(), { cache: "no-store" });
-        if (res.ok) {
-            const data = await res.json();
-            if (data && data.data && Array.isArray(data.data.traders)) {
-                return data.data.traders;
+        const cached = localStorage.getItem("mustard_synced_cloud_traders");
+        if (cached) {
+            const list = JSON.parse(cached);
+            if (Array.isArray(list)) {
+                list.forEach(t => {
+                    const uid = t.user_id || t.id;
+                    if (uid) realtimeTradersMap.set(uid, t);
+                });
             }
         }
-    } catch (e) {
-        console.warn("Cloud sync fetch error:", e);
+    } catch (e) {}
+
+    // 2. Connect to public MQTT WebSocket broker
+    if (typeof mqtt === "undefined") {
+        console.warn("MQTT library loading... retrying in 800ms");
+        setTimeout(initRealtimeCloudSync, 800);
+        return;
     }
-    return [];
+
+    const clientId = "mustard_" + Math.random().toString(16).substring(2, 10);
+    const brokerUrl = MQTT_BROKER_URLS[0];
+
+    try {
+        mqttClient = mqtt.connect(brokerUrl, {
+            clientId: clientId,
+            clean: false,
+            reconnectPeriod: 4000,
+            connectTimeout: 8000
+        });
+
+        mqttClient.on("connect", () => {
+            console.log("Connected to Realtime Leaderboard Sync via EMQX");
+            mqttClient.subscribe(`${MQTT_BASE_TOPIC}/#`, { qos: 1 }, (err) => {
+                if (!err) {
+                    if (currentUser) {
+                        pushCloudTrader(currentUser);
+                    }
+                }
+            });
+        });
+
+        mqttClient.on("message", (topic, payload) => {
+            try {
+                const trader = JSON.parse(payload.toString());
+                if (trader && (trader.user_id || trader.id)) {
+                    handleIncomingCloudTrader(trader);
+                }
+            } catch (err) {
+                console.warn("MQTT message parse error:", err);
+            }
+        });
+
+        mqttClient.on("error", (err) => {
+            console.warn("MQTT connection error:", err);
+        });
+
+    } catch (err) {
+        console.warn("Failed to initialize MQTT:", err);
+    }
 }
 
-async function pushCloudTrader(traderProfile) {
-    if (!traderProfile) return;
+function handleIncomingCloudTrader(trader) {
+    if (!trader) return;
+    const uid = trader.user_id || trader.id;
+    if (!uid) return;
+
+    realtimeTradersMap.set(uid, trader);
+
+    // Save to localStorage for instant reload on next visit
     try {
-        const existingCloud = await fetchCloudTraders();
-        const cleanProfile = {
-            user_id: traderProfile.id || traderProfile.user_id || ("trader_" + Date.now()),
-            username: traderProfile.username,
-            email: traderProfile.email,
-            display_name: traderProfile.display_name,
-            avatar_color: traderProfile.avatar_color,
-            portfolio_value: parseFloat(traderProfile.portfolio_value) || 0.0,
-            available_cash: parseFloat(traderProfile.available_cash) || 0.0,
-            today_profit_gbp: parseFloat(traderProfile.today_profit_gbp) || 0.0,
-            today_profit_pct: parseFloat(traderProfile.today_profit_pct) || 0.0,
-            today_trades_count: parseInt(traderProfile.today_trades_count) || 0,
-            active_holding: traderProfile.active_holding || "100% Cash",
-            last_updated: traderProfile.last_updated || new Date().toISOString()
-        };
+        const all = Array.from(realtimeTradersMap.values());
+        localStorage.setItem("mustard_synced_cloud_traders", JSON.stringify(all));
+    } catch (e) {}
 
-        const idx = existingCloud.findIndex(u => (u.email && u.email === cleanProfile.email) || (u.user_id && u.user_id === cleanProfile.user_id));
-        if (idx >= 0) {
-            existingCloud[idx] = cleanProfile;
-        } else {
-            existingCloud.push(cleanProfile);
-        }
+    // Refresh display
+    fetchLeaderboardData(false);
+}
 
-        await fetch(CLOUD_SYNC_URL, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                name: "Mustard Leaderboard",
-                data: { traders: existingCloud }
-            })
+function pushCloudTrader(traderProfile) {
+    if (!traderProfile) return;
+
+    const cleanProfile = {
+        user_id: traderProfile.id || traderProfile.user_id || ("trader_" + Date.now()),
+        id: traderProfile.id || traderProfile.user_id || ("trader_" + Date.now()),
+        username: traderProfile.username || "@trader",
+        email: traderProfile.email || "",
+        display_name: traderProfile.display_name || "Trader",
+        avatar_color: traderProfile.avatar_color || "#FFC107",
+        portfolio_value: parseFloat(traderProfile.portfolio_value) || 0.0,
+        available_cash: parseFloat(traderProfile.available_cash) || 0.0,
+        total_deposited: parseFloat(traderProfile.total_deposited) || 10000.0,
+        total_return_gbp: traderProfile.total_return_gbp !== undefined ? parseFloat(traderProfile.total_return_gbp) : ((parseFloat(traderProfile.portfolio_value) || 0.0) - (parseFloat(traderProfile.total_deposited) || 10000.0)),
+        total_return_pct: traderProfile.total_return_pct !== undefined ? parseFloat(traderProfile.total_return_pct) : 0.0,
+        today_profit_gbp: parseFloat(traderProfile.today_profit_gbp) || 0.0,
+        today_profit_pct: parseFloat(traderProfile.today_profit_pct) || 0.0,
+        today_trades_count: parseInt(traderProfile.today_trades_count) || 0,
+        active_holding: traderProfile.active_holding || "100% Cash",
+        last_updated: traderProfile.last_updated || new Date().toISOString()
+    };
+
+    // Store locally immediately
+    const uid = cleanProfile.user_id;
+    realtimeTradersMap.set(uid, cleanProfile);
+    try {
+        const all = Array.from(realtimeTradersMap.values());
+        localStorage.setItem("mustard_synced_cloud_traders", JSON.stringify(all));
+    } catch (e) {}
+
+    // Publish to MQTT broker with RETAIN=TRUE
+    if (mqttClient && mqttClient.connected) {
+        const cleanId = uid.replace(/[^a-zA-Z0-9_-]/g, "_");
+        const topic = `${MQTT_BASE_TOPIC}/${cleanId}`;
+        mqttClient.publish(topic, JSON.stringify(cleanProfile), { retain: true, qos: 1 }, (err) => {
+            if (err) console.warn("MQTT publish error:", err);
+            else console.log(`Synced trader ${cleanProfile.display_name} to cloud (${topic})`);
         });
-    } catch (e) {
-        console.warn("Cloud sync update error:", e);
     }
+}
+
+function fetchCloudTraders() {
+    return Array.from(realtimeTradersMap.values());
 }
 
 // --- Deduplication & Handle Helpers ---
@@ -286,23 +382,34 @@ async function fetchStaticLeaderboard() {
     try {
         let list = [];
 
-        // 1. Fetch from Global Cloud Store (Shared in real-time across ALL phones & computers!)
-        const cloudTraders = await fetchCloudTraders();
-        if (cloudTraders && cloudTraders.length > 0) {
-            list = [...cloudTraders];
-        }
-
-        // 2. Fallback to repo static seed if cloud returned empty
-        if (list.length === 0) {
-            try {
-                const res = await fetch("data/leaderboard.json?t=" + Date.now());
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.leaderboard && data.leaderboard.length > 0) {
-                        list = data.leaderboard;
-                    }
+        // 1. Always load baseline from repo static seed (so Musa's verified profile is guaranteed)
+        try {
+            const res = await fetch("data/leaderboard.json?t=" + Date.now());
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.leaderboard && Array.isArray(data.leaderboard)) {
+                    list = [...data.leaderboard];
                 }
-            } catch (e) {}
+            }
+        } catch (e) {}
+
+        // 2. Merge all traders discovered from Real-time Cloud Sync (MQTT retained messages & cached friends)
+        const cloudTraders = fetchCloudTraders();
+        if (cloudTraders && Array.isArray(cloudTraders)) {
+            for (const ct of cloudTraders) {
+                if (!ct) continue;
+                const idx = list.findIndex(x => 
+                    (x.user_id && ct.user_id && x.user_id === ct.user_id) || 
+                    (x.id && ct.id && x.id === ct.id) ||
+                    (x.email && ct.email && x.email.toLowerCase() === ct.email.toLowerCase()) ||
+                    ((x.display_name && x.display_name.toLowerCase() === "musa") && (ct.display_name && ct.display_name.toLowerCase() === "musa"))
+                );
+                if (idx >= 0) {
+                    list[idx] = { ...list[idx], ...ct };
+                } else {
+                    list.push(ct);
+                }
+            }
         }
         
         // 3. Merge current logged-in user if present
@@ -499,7 +606,7 @@ function renderTable(data) {
 
         return `
             <tr class="${isCurrent ? 'user-row' : ''}" id="trader-row-${item.user_id}">
-                <td class="text-center">${rankHtml}</td>
+                <td class="col-rank text-center">${rankHtml}</td>
                 <td>
                     <div class="trader-cell">
                         <div class="trader-avatar" style="background-color: ${avatarColor};">
