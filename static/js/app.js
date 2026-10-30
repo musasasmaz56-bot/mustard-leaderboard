@@ -313,6 +313,12 @@ function renderTable(data) {
         const initials = item.display_name ? item.display_name.charAt(0).toUpperCase() : "M";
         const syncTimeStr = formatTimeAgo(item.last_updated);
 
+        let handle = item.username || "";
+        if (!handle || handle.includes("@")) {
+            const raw = handle ? handle.split("@")[0] : (item.email ? item.email.split("@")[0] : "trader");
+            handle = "@" + raw;
+        }
+
         return `
             <tr class="${isCurrent ? 'user-row' : ''}" id="trader-row-${item.user_id}">
                 <td class="text-center">${rankHtml}</td>
@@ -326,7 +332,7 @@ function renderTable(data) {
                                 ${escapeHtml(item.display_name)}
                                 ${isCurrent ? '<span class="you-tag">YOU</span>' : ''}
                             </span>
-                            <span class="trader-username">${escapeHtml(item.email || item.username || '')}</span>
+                            <span class="trader-username">${escapeHtml(handle)}</span>
                         </div>
                     </div>
                 </td>
@@ -412,6 +418,161 @@ async function checkAuth() {
     renderNavLoggedOut();
 }
 
+// --- Mustard Investments Direct API Integration ---
+const MUSTARD_FIREBASE_KEY = "AIzaSyCR2F2Qubx4upC_9gYwqQAvbC2QSAmhOLo";
+const MUSTARD_PROJECT_ID = "mustard-investments";
+
+async function fetchMustardLiveStats(idToken, uid, email) {
+    const authHeaders = { "Authorization": `Bearer ${idToken}` };
+    const fsBase = `https://firestore.googleapis.com/v1/projects/${MUSTARD_PROJECT_ID}/databases/(default)/documents`;
+
+    const [userRes, portRes, holdRes, snapRes, ordersRes] = await Promise.all([
+        fetch(`${fsBase}/users/${uid}`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        fetch(`${fsBase}/portfolios/${uid}`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        fetch(`${fsBase}/portfolioHoldings/${uid}/holdings`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        fetch(`${fsBase}/portfolioSnapshots/${uid}/snapshots`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+        fetch(`${fsBase}/trades/${uid}/orders?pageSize=50`, { headers: authHeaders }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+    ]);
+
+    // 1. Display Name
+    let dispName = "Trader";
+    if (userRes.fields && userRes.fields.displayName && userRes.fields.displayName.stringValue) {
+        dispName = userRes.fields.displayName.stringValue;
+    } else {
+        const prefix = email.split("@")[0].replace(/[^a-zA-Z0-9]/g, " ").trim();
+        dispName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+    }
+    // Clean repetitive test names if any
+    if (dispName.toLowerCase().startsWith("musa")) {
+        dispName = "Musa";
+    }
+
+    // 2. Cash balance
+    let cash = 10000.0;
+    if (portRes.fields && portRes.fields.cashBalance) {
+        const cb = portRes.fields.cashBalance;
+        cash = parseFloat(cb.doubleValue !== undefined ? cb.doubleValue : cb.integerValue) || 0.0;
+    }
+
+    // 3. Holdings
+    let holdingsVal = 0.0;
+    let activeHolding = "100% Cash";
+    if (holdRes.documents && holdRes.documents.length > 0) {
+        const items = [];
+        for (const h of holdRes.documents) {
+            const hf = h.fields || {};
+            const sym = hf.symbol && hf.symbol.stringValue ? hf.symbol.stringValue : "";
+            const qty = parseFloat(hf.quantity ? (hf.quantity.doubleValue !== undefined ? hf.quantity.doubleValue : hf.quantity.integerValue) : 0) || 0;
+            const cost = parseFloat(hf.avgCostPrice ? (hf.avgCostPrice.doubleValue !== undefined ? hf.avgCostPrice.doubleValue : hf.avgCostPrice.integerValue) : 0) || 0;
+            if (qty > 0) {
+                holdingsVal += (qty * cost);
+                items.push(sym);
+            }
+        }
+        if (items.length > 0) {
+            activeHolding = items.join(", ");
+        }
+    }
+
+    const totalWealth = cash + holdingsVal;
+
+    // 4. Today's profit & ROI %
+    let todayProfitGbp = 0.0;
+    let todayProfitPct = 0.0;
+    if (snapRes.documents && snapRes.documents.length > 0) {
+        const sortedSnaps = [];
+        for (const s of snapRes.documents) {
+            const sf = s.fields || {};
+            const dStr = sf.date && sf.date.stringValue ? sf.date.stringValue : "";
+            const tv = parseFloat(sf.totalValue ? (sf.totalValue.doubleValue !== undefined ? sf.totalValue.doubleValue : sf.totalValue.integerValue) : 0) || 0;
+            if (dStr && tv > 0) {
+                sortedSnaps.push({ date: dStr, val: tv });
+            }
+        }
+        sortedSnaps.sort((a, b) => a.date.localeCompare(b.date));
+        if (sortedSnaps.length >= 2) {
+            const prevVal = sortedSnaps[sortedSnaps.length - 2].val;
+            todayProfitGbp = totalWealth - prevVal;
+            todayProfitPct = prevVal > 0 ? (todayProfitGbp / prevVal) * 100.0 : 0.0;
+        } else if (sortedSnaps.length === 1) {
+            const prevVal = sortedSnaps[0].val;
+            todayProfitGbp = totalWealth - prevVal;
+            todayProfitPct = prevVal > 0 ? (todayProfitGbp / prevVal) * 100.0 : 0.0;
+        }
+    }
+
+    // 5. Trades today
+    let todayTradesCount = 0;
+    if (ordersRes.documents && ordersRes.documents.length > 0) {
+        const now = new Date();
+        const startOfTodayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        for (const o of ordersRes.documents) {
+            const of = o.fields || {};
+            const ts = parseInt(of.timestamp ? of.timestamp.integerValue : 0) || 0;
+            if (ts >= startOfTodayMs) {
+                todayTradesCount++;
+            }
+        }
+    }
+
+    return {
+        id: uid,
+        email: email,
+        username: "@" + (dispName.toLowerCase().replace(/[^a-z0-9]/g, "") || email.split("@")[0]),
+        display_name: dispName,
+        portfolio_value: totalWealth,
+        available_cash: cash,
+        today_profit_gbp: todayProfitGbp,
+        today_profit_pct: todayProfitPct,
+        today_trades_count: todayTradesCount,
+        active_holding: activeHolding,
+        last_updated: new Date().toISOString()
+    };
+}
+
+// Background sync using refresh token
+async function syncMustardAccount() {
+    if (!currentUser || !currentUser.refreshToken) return;
+    const btn = document.getElementById("sync-mustard-btn");
+    if (btn) btn.textContent = "Syncing...";
+
+    try {
+        const tokenRes = await fetch(`https://securetoken.googleapis.com/v1/token?key=${MUSTARD_FIREBASE_KEY}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(currentUser.refreshToken)}`
+        });
+        if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            const newIdToken = tokenData.id_token;
+            const uid = tokenData.user_id || currentUser.id;
+            const updatedStats = await fetchMustardLiveStats(newIdToken, uid, currentUser.email);
+            
+            // Retain custom display name & color
+            updatedStats.display_name = currentUser.display_name;
+            updatedStats.avatar_color = currentUser.avatar_color;
+            updatedStats.idToken = newIdToken;
+            updatedStats.refreshToken = tokenData.refresh_token || currentUser.refreshToken;
+
+            currentUser = updatedStats;
+            localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
+
+            const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
+            const idx = localTraders.findIndex(u => u.email === currentUser.email || u.id === uid);
+            if (idx >= 0) localTraders[idx] = currentUser;
+            else localTraders.push(currentUser);
+            localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
+
+            renderNavLoggedIn(currentUser);
+            fetchLeaderboardData(true);
+        }
+    } catch (e) {
+        console.warn("Background Mustard sync error:", e);
+    } finally {
+        if (btn) btn.textContent = "🔄 Sync Mustard";
+    }
+}
+
 function renderNavLoggedIn(user) {
     const container = document.getElementById("nav-auth-container");
     const initials = user.display_name ? user.display_name.charAt(0).toUpperCase() : "M";
@@ -426,7 +587,7 @@ function renderNavLoggedIn(user) {
                 <span class="user-val">${formatGBP(user.portfolio_value)}</span>
             </div>
         </div>
-        <button class="btn btn-secondary" onclick="openUpdateModal()">Update Balance</button>
+        <button class="btn btn-secondary" id="sync-mustard-btn" onclick="syncMustardAccount()">🔄 Sync Mustard</button>
         <button class="btn btn-outline" onclick="openEditNameModal()">Edit Name</button>
         <button class="btn btn-icon" title="Log Out" onclick="handleLogout()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -445,97 +606,106 @@ function renderNavLoggedOut() {
     `;
 }
 
-// --- Login Handler (Mustard Email & Password) ---
+// --- Login Handler (Authenticates with Mustard Investments Website Live) ---
 async function handleLogin(e) {
     e.preventDefault();
     const errorEl = document.getElementById("login-error");
-    errorEl.style.display = "none";
+    if (errorEl) errorEl.style.display = "none";
+
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const origText = submitBtn ? submitBtn.textContent : "Log In";
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Connecting to Mustard...";
+    }
 
     const email = document.getElementById("login-email").value.trim().toLowerCase();
     const password = document.getElementById("login-password").value;
     const rememberMe = document.getElementById("login-remember") ? document.getElementById("login-remember").checked : true;
 
     if (!email || !password) {
-        errorEl.textContent = "Please enter both your Mustard email and password.";
-        errorEl.style.display = "block";
+        if (errorEl) {
+            errorEl.textContent = "Please enter both your Mustard email and password.";
+            errorEl.style.display = "block";
+        }
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = origText;
+        }
         return;
     }
 
     try {
-        const isStaticHost = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
-        if (!isStaticHost) {
-            const res = await fetch("/api/auth/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: email, password, remember_me: rememberMe })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                closeModal("login-modal");
-                await checkAuth();
-                fetchLeaderboardData(true);
-                return;
+        // Authenticate directly with Mustard Investments Firebase Auth
+        const authRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${MUSTARD_FIREBASE_KEY}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password, returnSecureToken: true })
+        });
+        const authData = await authRes.json();
+
+        if (!authRes.ok || authData.error) {
+            const msg = authData.error ? authData.error.message : "Authentication failed";
+            if (msg.includes("INVALID_LOGIN_CREDENTIALS") || msg.includes("EMAIL_NOT_FOUND") || msg.includes("INVALID_PASSWORD")) {
+                throw new Error("Invalid email or password. Please use your exact Mustard Investments account credentials.");
+            } else if (msg.includes("TOO_MANY_ATTEMPTS_TRY_LATER")) {
+                throw new Error("Too many login attempts. Please try again in a few moments.");
+            } else {
+                throw new Error(msg);
             }
         }
-    } catch (err) {
-        // Fallback to client-side auth for GitHub Pages
-    }
 
-    // Client-side authentication & instant auto-onboarding for GitHub Pages
-    const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
-    let found = localTraders.find(u => u.email === email || u.username === email);
-    
-    // If logging in for the first time with this email, create their trader record automatically!
-    if (!found) {
-        // Derive a clean display name and defaults from email
-        let defaultName = "Trader";
-        let defaultPortfolio = 10000.0;
-        let defaultProfit = 0.0;
-        let defaultTrades = 0;
-        let defaultHolding = "100% Cash";
+        const idToken = authData.idToken;
+        const uid = authData.localId;
+        const refreshToken = authData.refreshToken;
 
-        if (email.includes("sasmaz") || email.includes("musa")) {
-            defaultName = "Musa";
-            defaultPortfolio = 13392.33;
-            defaultProfit = 1392.33;
-            defaultTrades = 29;
-            defaultHolding = "OCDO.L";
+        // Fetch live stats directly from Mustard Investments Firestore
+        const liveStats = await fetchMustardLiveStats(idToken, uid, email);
+
+        // Keep existing custom display name if user has edited it before
+        const localTraders = JSON.parse(localStorage.getItem("mustard_local_traders") || "[]");
+        const existing = localTraders.find(u => u.email === email || u.id === uid);
+        if (existing && existing.display_name && existing.display_name !== "Trader") {
+            liveStats.display_name = existing.display_name;
+        }
+        const palette = ["#FFC107", "#00E676", "#00D2FF", "#FF5252", "#E040FB", "#FF9100", "#7C4DFF"];
+        liveStats.avatar_color = existing && existing.avatar_color ? existing.avatar_color : palette[Math.floor(Math.random() * palette.length)];
+
+        // Save session tokens for background re-sync
+        liveStats.idToken = idToken;
+        liveStats.refreshToken = refreshToken;
+
+        // Update local list
+        const idx = localTraders.findIndex(u => u.email === email || u.id === uid);
+        if (idx >= 0) {
+            localTraders[idx] = liveStats;
         } else {
-            const prefix = email.split("@")[0].replace(/[^a-zA-Z0-9]/g, " ").trim();
-            defaultName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+            localTraders.push(liveStats);
+        }
+        localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
+
+        currentUser = liveStats;
+        localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
+        if (rememberMe) {
+            document.cookie = `session_user=${encodeURIComponent(email)}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
         }
 
-        const palette = ["#FFC107", "#00E676", "#00D2FF", "#FF5252", "#E040FB", "#FF9100", "#7C4DFF"];
-        const avatarColor = email.includes("sasmaz") || email.includes("musa") ? "#FFC107" : palette[Math.floor(Math.random() * palette.length)];
+        closeModal("login-modal");
+        renderNavLoggedIn(currentUser);
+        fetchLeaderboardData(true);
 
-        found = {
-            id: Date.now(),
-            email: email,
-            username: email,
-            display_name: defaultName,
-            avatar_color: avatarColor,
-            portfolio_value: defaultPortfolio,
-            available_cash: defaultPortfolio > 10000 ? 0.21 : defaultPortfolio,
-            today_profit_gbp: defaultProfit,
-            today_profit_pct: defaultPortfolio > 0 ? ((defaultProfit / defaultPortfolio) * 100.0) : 0.0,
-            today_trades_count: defaultTrades,
-            active_holding: defaultHolding,
-            last_updated: new Date().toISOString()
-        };
-
-        localTraders.push(found);
-        localStorage.setItem("mustard_local_traders", JSON.stringify(localTraders));
+    } catch (err) {
+        console.error("Mustard Login Error:", err);
+        if (errorEl) {
+            errorEl.textContent = err.message || "Failed to connect to Mustard Investments.";
+            errorEl.style.display = "block";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = origText;
+        }
     }
-
-    currentUser = found;
-    localStorage.setItem("mustard_current_user", JSON.stringify(currentUser));
-    if (rememberMe) {
-        document.cookie = `session_user=${encodeURIComponent(email)}; max-age=${30 * 86400}; path=/; SameSite=Lax`;
-    }
-
-    closeModal("login-modal");
-    renderNavLoggedIn(currentUser);
-    fetchLeaderboardData(true);
 }
 
 async function handleRegister(e) {

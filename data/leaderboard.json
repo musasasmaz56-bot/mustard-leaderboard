@@ -1,10 +1,25 @@
 {
-  "last_synced": "2026-10-30T18:30:00Z",
-  "leaderboard": [],
+  "last_synced": "2026-10-30T19:00:00Z",
+  "leaderboard": [
+    {
+      "user_id": "OoN6RqzisFYNU6AXlZ2YRNLbMmB2",
+      "username": "@musa",
+      "email": "musa@ccgrammarschool.co.uk",
+      "display_name": "Musa",
+      "avatar_color": "#FFC107",
+      "portfolio_value": 13656.33,
+      "available_cash": 13656.33,
+      "today_profit_gbp": 964.46,
+      "today_profit_pct": 7.60,
+      "today_trades_count": 5,
+      "active_holding": "100% Cash",
+      "last_updated": "2026-10-30T18:19:04Z"
+    }
+  ],
   "summary": {
-    "total_wealth": 0.0,
-    "total_today_profit": 0.0,
-    "total_trades": 0,
-    "active_traders": 0
+    "total_wealth": 13656.33,
+    "total_today_profit": 964.46,
+    "total_trades": 5,
+    "active_traders": 1
   }
 }
